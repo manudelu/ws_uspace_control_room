@@ -1,0 +1,6 @@
+# Request (empty)
+---
+# Response
+bool success         # Whether the fetch succeeded
+string message       # Status message
+string waypoints     # JSON string of waypoints

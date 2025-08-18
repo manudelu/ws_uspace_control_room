@@ -1,0 +1,10 @@
+# Editor folders
+.vscode/
+
+# ROS 2 build folders
+build/
+install/
+log/
+
+# Environment variables
+.env
