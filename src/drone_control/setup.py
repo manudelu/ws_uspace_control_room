@@ -24,6 +24,7 @@ setup(
         'console_scripts': [
             'offb_node = drone_control.offb_node:main',
             'telemetry_broadcaster = drone_control.telemetry_broadcaster:main',
+            'battery_status = drone_control.battery_status:main',
         ],
     },
 )
