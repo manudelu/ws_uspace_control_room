@@ -49,16 +49,13 @@ class OffboardControl(Node):
         """Initialize all publishers and subscribers for a new drone."""
         # Initialize drone data structure
         self.drones[drone_id] = {
-            # Drone state
             'vehicle_status': None,
             'offboard_counter': 0,
-            # Telemetry data
             'vx': 0.0,
             'vy': 0.0,
             'vz': 0.0,
             'yawspeed': 0.0,
             'timestamp': 0.0,
-            # Communication interfaces
             'publishers': None,
             'subscribers': None
         }
@@ -114,6 +111,12 @@ class OffboardControl(Node):
             'yawspeed': msg.velocity.angular.z,
             'timestamp': msg.timestamp
         })
+
+        if drone['vehicle_status'] is not None:
+            if (drone['vehicle_status'].arming_state != VehicleStatus.ARMING_STATE_ARMED and (msg.velocity.linear.x != 0.0 or msg.velocity.linear.y != 0.0 or msg.velocity.linear.z != 0.0)): 
+                self.get_logger().info(f"Velocity command received → Arming and engaging offboard for drone {drone_id}")
+                self.arm(drone_id)
+                self.engage_offboard_mode(drone_id)
         
     def vehicle_status_callback(self, msg: VehicleStatus, drone_id: int) -> None:
         """Callback function for vehicle_status topic subscriber."""
@@ -201,17 +204,20 @@ class OffboardControl(Node):
             if 'publishers' not in drone or drone.get('vehicle_status') is None:
                 continue
 
+            # Always publish heartbeat (keeps offboard alive)
             self.publish_offboard_control_heartbeat_signal(drone_id)
 
-            if drone['offboard_counter'] == 10:
-                self.engage_offboard_mode(drone_id)
-                self.arm(drone_id)
-
-            if drone['vehicle_status'].nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
+            # If drone is already in offboard + armed → send velocity
+            if (drone['vehicle_status'].nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and drone['vehicle_status'].arming_state == VehicleStatus.ARMING_STATE_ARMED):
                 self.publish_velocity_setpoint(drone_id)
-            
-            if drone['offboard_counter'] < 11:
-                drone['offboard_counter'] += 1
+            else:
+                # Send a safe idle setpoint ([0,0,0]) so PX4 still gets something
+                msg = TrajectorySetpoint()
+                msg.position = [float('nan')]*3
+                msg.velocity = [0.0, 0.0, 0.0]
+                msg.yawspeed = 0.0
+                msg.timestamp = self.get_clock().now().nanoseconds // 1000
+                self.drones[drone_id]['publishers']['trajectory_setpoint'].publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)

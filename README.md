@@ -33,7 +33,7 @@ build.cmd
 * Press the *Play* button in Unreal Editor and choose *No* when prompted about spawning a car or a multirotor.
 * You'll see the multirotor spawning inside the BlocksV2 environment.
 
-*4. Navigate to `Documents\AirSim`, and copy this inside the `settings.json` file (depending on your own configuration you'll need to tweak these parameters, please refer to the [official documentation](https://cosys-lab.github.io/Cosys-AirSim/settings/)):
+* 4. Navigate to `Documents\AirSim`, and copy this inside the `settings.json` file (depending on your own configuration you'll need to tweak these parameters, please refer to the [official documentation](https://cosys-lab.github.io/Cosys-AirSim/settings/)):
 ```
 {
     "SettingsVersion": 2.0,
