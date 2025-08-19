@@ -23,7 +23,8 @@ setup(
     entry_points={
         'console_scripts': [
           'mqtt_ros_bridge = mqtt_bridge.mqtt_ros_bridge:main',
-          'fetch_mission = mqtt_bridge.fetch_mission:main',
+          'mission_service_server = mqtt_bridge.mission_service_server:main',
+          'mission_mqtt_publisher = mqtt_bridge.mission_mqtt_publisher:main',
         ],
     },
 )

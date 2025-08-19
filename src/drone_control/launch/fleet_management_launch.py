@@ -30,8 +30,16 @@ def generate_launch_description():
         output='screen'
     )
 
+    battery_status_node = Node(
+        package='drone_control',
+        executable='battery_status',
+        name='battery_status',
+        output='screen'
+    )
+
     return LaunchDescription([
         mqtt_bridge_launch,
         offboard_node,
         telemetry_broadcaster_node,
+        battery_status_node,
     ])

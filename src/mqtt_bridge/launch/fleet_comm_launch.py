@@ -10,7 +10,7 @@ def generate_launch_description():
         ),
         Node(
             package='mqtt_bridge',
-            executable='fetch_mission',
-            name='fetch_mission'
+            executable='mission_service_server',
+            name='mission_service_server'
         ),
     ])

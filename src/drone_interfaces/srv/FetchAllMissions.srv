@@ -1,0 +1,8 @@
+# Request
+int32[] drone_ids   # List of drone IDs to fetch, empty = all registered drones
+
+---
+# Response
+bool success
+string message
+string missions_json  # JSON dict: {drone_id: [waypoints]}

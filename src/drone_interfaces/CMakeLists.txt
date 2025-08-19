@@ -13,6 +13,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/DroneControl.action"
   "srv/FetchMission.srv"
+  "srv/FetchAllMissions.srv"
   "msg/DroneTelemetry.msg"
   "msg/DroneCommand.msg"
   "msg/DroneStatus.msg"
