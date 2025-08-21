@@ -13,4 +13,9 @@ def generate_launch_description():
             executable='mission_service_server',
             name='mission_service_server'
         ),
+        Node(
+            package='mqtt_bridge',
+            executable='mission_mqtt_publisher',
+            name='mission_mqtt_publisher'
+        ),
     ])

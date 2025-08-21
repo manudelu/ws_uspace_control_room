@@ -33,7 +33,9 @@ build.cmd
 * Press the *Play* button in Unreal Editor and choose *No* when prompted about spawning a car or a multirotor.
 * You'll see the multirotor spawning inside the BlocksV2 environment.
 
-* 4. Navigate to `Documents\AirSim`, and copy this inside the `settings.json` file (depending on your own configuration you'll need to tweak these parameters, please refer to the [official documentation](https://cosys-lab.github.io/Cosys-AirSim/settings/)):
+*4. Settings.json*
+
+Navigate to `Documents\AirSim`, and copy this inside the `settings.json` file (depending on your own configuration you'll need to tweak these parameters, please refer to the [official documentation](https://cosys-lab.github.io/Cosys-AirSim/settings/))
 ```
 {
     "SettingsVersion": 2.0,
@@ -114,7 +116,7 @@ python3 -m pip install paho-mqtt
 pip install python-dotenv
 ```
 
-* Install PX4 Autopilot
+*1. Install PX4 Autopilot*
 
 ```bash
 git clone https://github.com/PX4/PX4-Autopilot.git --recursive
@@ -123,7 +125,7 @@ cd PX4-Autopilot/
 make px4_sitl_default
 ```
 
-* Configure PX4 for Cosys-AirSim
+*2. Configure PX4 for Cosys-AirSim*
 
 Edit `.bashrc`:
 
@@ -134,7 +136,7 @@ export PX4_SIM_HOST_ADDR=192.168.9.37    # <-- IP of the machine running Unreal 
 source ~/.bashrc
 ```
 
-* Update PX4
+*3. Update PX4*
 
 ```bash
 cd PX4-Autopilot/
@@ -144,9 +146,9 @@ git checkout v1.15.4      # Or another release
 make submodulesclean
 ```
 
-* Test PX4 ↔ AirSim communication
+*4. Test PX4 ↔ AirSim communication*
 
-After launching the Unreal Engine simulation:
+* After launching the Unreal Engine simulation:
 
 ```bash
 make px4_sitl_default none_iris
@@ -154,7 +156,7 @@ make px4_sitl_default none_iris
 ./PX4-Autopilot/Tools/simulation/sitl_multiple_run.sh 1 
 ```
 
-In the PX4 console (only once, to enable multi-drone simulation):
+* In the PX4 console (only once, to enable multi-drone simulation):
 
 ```bash
 param set UXRCE_DDS_KEY $((px4_instance+1)) 

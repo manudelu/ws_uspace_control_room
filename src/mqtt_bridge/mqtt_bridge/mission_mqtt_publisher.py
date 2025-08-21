@@ -15,7 +15,6 @@ MAV_CMD_NAV_WAYPOINT = 16
 MAV_CMD_NAV_RETURN_TO_LAUNCH = 20
 MAV_CMD_NAV_LAND = 21
 MAV_CMD_NAV_TAKEOFF = 22
-SKIP_CMDS = {MAV_CMD_NAV_RETURN_TO_LAUNCH, MAV_CMD_NAV_LAND, MAV_CMD_NAV_TAKEOFF}
 
 class MissionClient(Node):
     """ROS2 client for fetching and publishing missions via MQTT."""
