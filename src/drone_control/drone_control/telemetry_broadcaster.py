@@ -12,8 +12,8 @@ class TelemetryBroadcaster(Node):
     def __init__(self):
         super().__init__("telemetry_broadcaster")
         
-        self.declare_parameter("udp_host", "192.168.8.5")
-        self.declare_parameter("udp_port_base", 8000)
+        self.declare_parameter("udp_host", "192.168.9.37")
+        self.declare_parameter("udp_port_base", 3000)
         
         self.udp_host = self.get_parameter("udp_host").value
         self.udp_port_base = self.get_parameter("udp_port_base").value
@@ -37,7 +37,7 @@ class TelemetryBroadcaster(Node):
 
     def drone_id_callback(self, msg: String) -> None:
         drone_id = msg.data
-        telemetry_topic = f"fleet/drone{drone_id}/telemetry_data"
+        telemetry_topic = f"fleet/drone{drone_id}/telemetry"
 
         if drone_id not in self.subscribers:
             self.subscribers[drone_id] = self.create_subscription(
@@ -86,7 +86,7 @@ class TelemetryBroadcaster(Node):
 
                 try:
                     udp_socket.sendto(telemetry_json.encode(), (self.udp_host, udp_port))
-                    # self.get_logger().debug(f"Sent UDP data for drone {drone_id}")
+                    self.get_logger().debug(f"Sent UDP data for drone {drone_id}")
                 except Exception as e:
                     self.get_logger().error(f"UDP send error for drone {drone_id}: {e}")
 

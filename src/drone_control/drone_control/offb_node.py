@@ -112,15 +112,30 @@ class OffboardControl(Node):
             'timestamp': msg.timestamp
         })
 
-        if drone['vehicle_status'] is not None:
-            if (drone['vehicle_status'].arming_state != VehicleStatus.ARMING_STATE_ARMED and (msg.velocity.linear.x != 0.0 or msg.velocity.linear.y != 0.0 or msg.velocity.linear.z != 0.0)): 
+        status = drone['vehicle_status']
+        if status is None:
+            return
+
+        has_velocity_command = (
+            msg.velocity.linear.x != 0.0 or 
+            msg.velocity.linear.y != 0.0 or 
+            msg.velocity.linear.z != 0.0
+        )
+
+        # Only trigger once when we actually need to arm & switch
+        if has_velocity_command and status.arming_state != VehicleStatus.ARMING_STATE_ARMED:
+            if not drone.get('arming_sent', False):
                 self.get_logger().info(f"Velocity command received → Arming and engaging offboard for drone {drone_id}")
                 self.arm(drone_id)
                 self.engage_offboard_mode(drone_id)
+                drone['arming_sent'] = True
+
         
     def vehicle_status_callback(self, msg: VehicleStatus, drone_id: int) -> None:
         """Callback function for vehicle_status topic subscriber."""
         self.drones[drone_id]['vehicle_status'] = msg
+        if msg.arming_state == VehicleStatus.ARMING_STATE_DISARMED:
+            self.drones[drone_id]['arming_sent'] = False
 
     def arm(self, drone_id: int) -> None:
         """Send an arm command to the vehicle."""
@@ -160,13 +175,14 @@ class OffboardControl(Node):
 
     def publish_offboard_control_heartbeat_signal(self, drone_id: int) -> None:
         """Publish offboard control mode."""
+        drone = self.drones[drone_id]
         msg = OffboardControlMode()
         msg.position = False
         msg.velocity = True
         msg.acceleration = False
         msg.attitude = False
         msg.body_rate = False
-        msg.timestamp = self.get_clock().now().nanoseconds // 1000 # drone['timestamp']
+        msg.timestamp = self.get_clock().now().nanoseconds // 1000 
         self.drones[drone_id]['publishers']['offboard_control_mode'].publish(msg)
 
     def publish_velocity_setpoint(self, drone_id: int):
@@ -176,11 +192,12 @@ class OffboardControl(Node):
         msg.position = [float('nan')]*3
         msg.velocity = [drone['vy'], drone['vx'], -drone['vz']]  # NED frame
         msg.yawspeed = drone['yawspeed']
-        msg.timestamp = self.get_clock().now().nanoseconds // 1000 # drone['timestamp']
+        msg.timestamp = self.get_clock().now().nanoseconds // 1000 
         self.drones[drone_id]['publishers']['trajectory_setpoint'].publish(msg)
 
     def publish_vehicle_command(self, drone_id: int, command, **params) -> None:
         """Send vehicle command."""
+        drone = self.drones[drone_id]
         msg = VehicleCommand()
         msg.command = command
         msg.param1 = params.get("param1", 0.0)
@@ -195,7 +212,7 @@ class OffboardControl(Node):
         msg.source_system = 1
         msg.source_component = 1
         msg.from_external = True
-        msg.timestamp = self.get_clock().now().nanoseconds // 1000 # drone['timestamp']
+        msg.timestamp = self.get_clock().now().nanoseconds // 1000
         self.drones[drone_id]['publishers']['vehicle_command'].publish(msg)
 
     def timer_callback(self) -> None:
