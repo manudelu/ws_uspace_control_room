@@ -7,6 +7,7 @@ from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand
 from drone_interfaces.msg import DroneTelemetry
 from std_msgs.msg import String
 from typing import Dict, Any
+from drone_control.drone_param_manager import PX4ParamManager
 
 
 class OffboardControl(Node):
@@ -50,14 +51,15 @@ class OffboardControl(Node):
         # Initialize drone data structure
         self.drones[drone_id] = {
             'vehicle_status': None,
-            'offboard_counter': 0,
             'vx': 0.0,
             'vy': 0.0,
             'vz': 0.0,
             'yawspeed': 0.0,
             'timestamp': 0.0,
             'publishers': None,
-            'subscribers': None
+            'subscribers': None,
+            'params_configured': False,
+            'param_manager': None,
         }
 
         # Determine topic namespace
@@ -112,6 +114,10 @@ class OffboardControl(Node):
             'timestamp': msg.timestamp
         })
 
+        # Configure PX4 params once, using drone type from telemetry
+        if not drone['params_configured'] and hasattr(msg, 'drone_type'):
+            self.configure_drone_params(drone_id, msg.drone_type)
+
         status = drone['vehicle_status']
         if status is None:
             return
@@ -130,7 +136,18 @@ class OffboardControl(Node):
                 self.engage_offboard_mode(drone_id)
                 drone['arming_sent'] = True
 
-        
+    def configure_drone_params(self, drone_id: int, drone_type: str) -> None:
+        """Configure PX4 parameters for a given drone type."""
+        try:
+            connection_url = f"udp:127.0.0.1:{14540 + (drone_id - 1)}"
+            param_manager = PX4ParamManager(connection_url)
+            param_manager.configure_drone(drone_type)
+            self.drones[drone_id]['param_manager'] = param_manager
+            self.drones[drone_id]['params_configured'] = True
+            self.get_logger().info(f"PX4 parameters configured for drone {drone_id} ({drone_type})")
+        except Exception as e:
+            self.get_logger().error(f"Failed to configure PX4 parameters for drone {drone_id}: {e}")
+
     def vehicle_status_callback(self, msg: VehicleStatus, drone_id: int) -> None:
         """Callback function for vehicle_status topic subscriber."""
         self.drones[drone_id]['vehicle_status'] = msg

@@ -137,6 +137,7 @@ class DroneTelemetryListener(Node):
 
         telemetry_msg = DroneTelemetry()
         telemetry_msg.drone_id = int(self.extract_data(data, ['drone', 'id'], 0))
+        telemetry_msg.type = str(self.extract_data(data, ['drone', 'type'], ""))
         telemetry_msg.error_status = int(self.extract_data(data, ['status', 'error'], 0))
         telemetry_msg.flight_status = int(self.extract_data(data, ['status', 'flight'], 0))
         telemetry_msg.gear = int(self.extract_data(data, ['status', 'gear'], 0))
@@ -158,11 +159,20 @@ class DroneTelemetryListener(Node):
         telemetry_msg.velocity.angular.y = float(self.extract_data(data, ['angularVelocity', 'y'], 0.0))
         telemetry_msg.velocity.angular.z = float(self.extract_data(data, ['angularVelocity', 'z'], 0.0))
 
-        telemetry_msg.q0 = float(self.extract_data(data, ['quaternion', 'q0'], 0.0))
-        telemetry_msg.q1 = float(self.extract_data(data, ['quaternion', 'q1'], 0.0))
-        telemetry_msg.q2 = float(self.extract_data(data, ['quaternion', 'q2'], 0.0))
-        telemetry_msg.q3 = float(self.extract_data(data, ['quaternion', 'q3'], 0.0))
-        telemetry_msg.yaw = math.atan2(2 * (telemetry_msg.q0 * telemetry_msg.q3 + telemetry_msg.q1 * telemetry_msg.q2), 1 - 2 * (telemetry_msg.q2 * telemetry_msg.q2 + telemetry_msg.q3 * telemetry_msg.q3)) * (180 / math.pi)
+        telemetry_msg.orientation.w = float(self.extract_data(data, ['quaternion', 'q0'], 1.0))
+        telemetry_msg.orientation.x = float(self.extract_data(data, ['quaternion', 'q1'], 0.0))
+        telemetry_msg.orientation.y = float(self.extract_data(data, ['quaternion', 'q2'], 0.0))
+        telemetry_msg.orientation.z = float(self.extract_data(data, ['quaternion', 'q3'], 0.0))
+
+        # Yaw from quaternion (in degrees)
+        q0 = telemetry_msg.orientation.w
+        q1 = telemetry_msg.orientation.x
+        q2 = telemetry_msg.orientation.y
+        q3 = telemetry_msg.orientation.z
+        telemetry_msg.yaw = math.atan2(
+            2 * (q0 * q3 + q1 * q2),
+            1 - 2 * (q2 * q2 + q3 * q3)
+        ) * (180.0 / math.pi)
 
         telemetry_msg.avoid_down = float(self.extract_data(data, ['avoidData', 'down'], 0))
         telemetry_msg.avoid_back = float(self.extract_data(data, ['avoidData', 'back'], 0))

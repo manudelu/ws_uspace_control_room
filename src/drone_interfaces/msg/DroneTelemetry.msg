@@ -1,4 +1,5 @@
 int32 drone_id
+string type
 int32 flight_status
 int32 error_status
 int32 gear
@@ -9,10 +10,7 @@ geometry_msgs/Point ext_position
 int32 ext_position_status  
 geometry_msgs/Twist velocity
 float64 yaw
-float64 q0
-float64 q1
-float64 q2
-float64 q3
+geometry_msgs/Quaternion orientation
 geometry_msgs/Twist rc_data
 
 float64 avoid_down
