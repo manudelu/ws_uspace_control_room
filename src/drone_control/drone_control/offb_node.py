@@ -8,6 +8,7 @@ from drone_interfaces.msg import DroneTelemetry
 from std_msgs.msg import String
 from typing import Dict, Any
 import math
+from drone_control.pid_controller import PIDController
 from drone_control.drone_param_manager import PX4ParamManager
 
 def latlon_diff_to_meters(lat1, lon1, lat2, lon2):
@@ -90,6 +91,15 @@ class OffboardControl(Node):
             'arming_sent': False,   
             'disarm_sent': False, 
         }
+
+        self.drones[drone_id]['pid'] = PIDController(
+            kp_vert=0.8, kd_vert=0.0, ki_vert=0.0,
+            kp_horiz=0.6, kd_horiz=0.0, ki_horiz=0.00,
+            kp_yaw=0.0, kd_yaw=0.0, ki_yaw=0.0,
+            integral_limit=5.0,
+            alpha=0.7,           
+            output_limit=3.0     
+        )
 
         # Determine topic namespace
         ns = '' if drone_id == 1 else f'px4_{drone_id-1}/'
@@ -275,13 +285,14 @@ class OffboardControl(Node):
         msg.timestamp = self.get_clock().now().nanoseconds // 1000 
         self.drones[drone_id]['publishers']['offboard_control_mode'].publish(msg)
 
-    def publish_velocity_setpoint(self, drone_id: int):
+    def publish_velocity_setpoint(self, drone_id: int, velocity: dict = None) -> None:
         """Publish velocity commands."""
-        drone = self.drones[drone_id]
+        #drone = self.drones[drone_id]
+        vx, vy, vz, vw = velocity['x'], velocity['y'], -velocity['z'], velocity['yaw']
         msg = TrajectorySetpoint()
         msg.position = [float('nan')]*3
-        msg.velocity = [drone['vx'], drone['vy'], -drone['vz']]  # NED frame
-        msg.yawspeed = drone['yawspeed']
+        msg.velocity = [vx, vy, vz]  # NED frame
+        msg.yawspeed = vw
         msg.timestamp = self.get_clock().now().nanoseconds // 1000 
         self.drones[drone_id]['publishers']['trajectory_setpoint'].publish(msg)
 
@@ -307,6 +318,8 @@ class OffboardControl(Node):
 
     def timer_callback(self) -> None:
         """Main control loop executed at fixed frequency."""
+        dt = 1.0 / self.control_frequency
+
         for drone_id, drone in self.drones.items():
             if 'publishers' not in drone or drone.get('vehicle_status') is None:
                 continue
@@ -320,15 +333,22 @@ class OffboardControl(Node):
 
             # If drone is already in offboard + armed → send velocity
             if (drone['vehicle_status'].nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and drone['vehicle_status'].arming_state == VehicleStatus.ARMING_STATE_ARMED):
-                self.publish_velocity_setpoint(drone_id)
+                pid = drone['pid']
+                velocity_cmd, debug = pid.compute(
+                    latitude=drone['lat'],
+                    longitude=drone['lon'],
+                    altitude=drone['alt'],
+                    yaw=drone['yaw'],
+                    sim_lat=drone['sim_lat'],
+                    sim_lon=drone['sim_lon'],
+                    sim_alt=drone['sim_alt'],
+                    sim_yaw=0.0,  
+                    dt=dt
+                )
+                self.publish_velocity_setpoint(drone_id, velocity=velocity_cmd)
             else:
-                # Send a safe idle setpoint ([0,0,0]) so PX4 still gets something
-                msg = TrajectorySetpoint()
-                msg.position = [float('nan')]*3
-                msg.velocity = [0.0, 0.0, 0.0]
-                msg.yawspeed = 0.0
-                msg.timestamp = self.get_clock().now().nanoseconds // 1000
-                self.drones[drone_id]['publishers']['trajectory_setpoint'].publish(msg)
+                # Safe idle velocity
+                self.publish_velocity_setpoint(drone_id, velocity={'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0})
 
 def main(args=None):
     rclpy.init(args=args)
