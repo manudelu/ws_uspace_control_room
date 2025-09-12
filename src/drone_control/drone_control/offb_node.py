@@ -92,6 +92,7 @@ class OffboardControl(Node):
             'disarm_sent': False, 
         }
 
+        # TODO: Tune PID parameters 
         self.drones[drone_id]['pid'] = PIDController(
             kp_vert=0.8, kd_vert=0.0, ki_vert=0.0,
             kp_horiz=0.6, kd_horiz=0.0, ki_horiz=0.00,
@@ -334,6 +335,7 @@ class OffboardControl(Node):
             # If drone is already in offboard + armed → send velocity
             if (drone['vehicle_status'].nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and drone['vehicle_status'].arming_state == VehicleStatus.ARMING_STATE_ARMED):
                 pid = drone['pid']
+                # TODO: Yaw control not implemented yet
                 velocity_cmd, debug = pid.compute(
                     latitude=drone['lat'],
                     longitude=drone['lon'],

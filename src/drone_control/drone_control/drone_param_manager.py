@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from pymavlink import mavutil
 
-
 class PX4ParamManager:
     """
     PX4 Parameter Manager using pymavlink.
