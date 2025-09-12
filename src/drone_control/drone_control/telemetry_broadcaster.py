@@ -46,7 +46,7 @@ class TelemetryBroadcaster(Node):
                 lambda msg, id=drone_id: self.telemetry_callback(msg, id),
                 10
             )
-
+            
             # Assign a unique UDP port for this drone
             udp_port = self.udp_port_base + int(drone_id)
             udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

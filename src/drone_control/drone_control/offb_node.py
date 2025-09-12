@@ -3,12 +3,29 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleStatus
+from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleStatus, VehicleGlobalPosition
 from drone_interfaces.msg import DroneTelemetry
 from std_msgs.msg import String
 from typing import Dict, Any
+import math
 from drone_control.drone_param_manager import PX4ParamManager
 
+def latlon_diff_to_meters(lat1, lon1, lat2, lon2):
+    """
+    Convert latitude and longitude differences to meters in north/east directions
+    """
+    # Earth's radius in meters
+    R = 6371000.0
+    
+    # Convert latitude difference to meters (north-south)
+    lat_diff_m = (lat2 - lat1) * math.pi/180 * R
+    
+    # Convert longitude difference to meters (east-west)
+    # Account for latitude (longitude distances shrink as you move toward poles)
+    avg_lat = (lat1 + lat2) / 2.0 * math.pi/180
+    lon_diff_m = (lon2 - lon1) * math.pi/180 * R * math.cos(avg_lat)
+    
+    return lat_diff_m, lon_diff_m
 
 class OffboardControl(Node):
     """Node for controlling multiple vehicles in offboard mode using existing topics."""
@@ -41,10 +58,13 @@ class OffboardControl(Node):
 
     def vehicle_id_callback(self, msg: String) -> None:
         """Handle new drone registration."""
-        drone_id = int(msg.data)
-        if drone_id >= 1 and drone_id not in self.drones:
-            self.register_drone(drone_id)
-            self.get_logger().info(f"Registered new drone with ID: {drone_id}")
+        try:
+            drone_id = int(msg.data)
+            if drone_id >= 1 and drone_id not in self.drones:
+                self.register_drone(drone_id)
+                self.get_logger().info(f"Registered new drone with ID: {drone_id}")
+        except ValueError:
+            self.get_logger().error(f"Invalid drone ID received: {msg.data}")
 
     def register_drone(self, drone_id: int) -> None:
         """Initialize all publishers and subscribers for a new drone."""
@@ -55,11 +75,20 @@ class OffboardControl(Node):
             'vy': 0.0,
             'vz': 0.0,
             'yawspeed': 0.0,
-            'timestamp': 0.0,
+            'lat': 0.0,
+            'lon': 0.0,
+            'alt': 0.0,
+            'yaw': 0.0,
+            'sim_lat': 0.0,
+            'sim_lon': 0.0,
+            'sim_alt': 0.0,
             'publishers': None,
             'subscribers': None,
             'params_configured': False,
             'param_manager': None,
+            'prestreaming': True,
+            'arming_sent': False,   
+            'disarm_sent': False, 
         }
 
         # Determine topic namespace
@@ -77,6 +106,12 @@ class OffboardControl(Node):
                 VehicleStatus, 
                 f'/{ns}fmu/out/vehicle_status',
                 lambda msg, id=drone_id: self.vehicle_status_callback(msg, id),
+                self.qos_profile
+            ),
+            'vehicle_sim_global_pose': self.create_subscription(
+                VehicleGlobalPosition,
+                f'/{ns}fmu/out/vehicle_global_position',
+                lambda msg, id=drone_id: self.vehicle_sim_global_pose_callback(msg, id),
                 self.qos_profile
             ),
         }
@@ -104,37 +139,55 @@ class OffboardControl(Node):
         self.drones[drone_id]['publishers'] = publishers
 
     def vehicle_telemetry_callback(self, msg: DroneTelemetry, drone_id: int) -> None:
-        """Update drone telemetry data."""
         drone = self.drones[drone_id]
         drone.update({
             'vx': msg.velocity.linear.x,
             'vy': msg.velocity.linear.y,
             'vz': msg.velocity.linear.z,
             'yawspeed': msg.velocity.angular.z,
-            'timestamp': msg.timestamp
+            'lat': msg.global_position.x,
+            'lon': msg.global_position.y,
+            'alt': msg.global_position.z,
+            'yaw': msg.yaw,
+            'status': msg.flight_status,
         })
-
-        # Configure PX4 params once, using drone type from telemetry
-        if not drone['params_configured'] and hasattr(msg, 'drone_type'):
-            self.configure_drone_params(drone_id, msg.drone_type)
 
         status = drone['vehicle_status']
         if status is None:
             return
 
-        has_velocity_command = (
-            msg.velocity.linear.x != 0.0 or 
-            msg.velocity.linear.y != 0.0 or 
-            msg.velocity.linear.z != 0.0
-        )
+        now = self.get_clock().now().nanoseconds / 1e9  # seconds
+        last_arm_attempt = drone.get('last_arm_attempt', 0.0)
 
-        # Only trigger once when we actually need to arm & switch
-        if has_velocity_command and status.arming_state != VehicleStatus.ARMING_STATE_ARMED:
-            if not drone.get('arming_sent', False):
-                self.get_logger().info(f"Velocity command received → Arming and engaging offboard for drone {drone_id}")
+        # Configure params once
+        if not drone['params_configured'] and hasattr(msg, 'drone_type'):
+            self.configure_drone_params(drone_id, msg.drone_type)
+
+        # --- DISARM: flight_status == 0 ---
+        if getattr(msg, 'flight_status', None) == 0:
+            if status.arming_state == VehicleStatus.ARMING_STATE_ARMED and not drone.get('disarm_sent', False):
+                self.get_logger().info(f"Telemetry flight_status==0 → sending disarm for drone {drone_id}")
+                self.land(drone_id)
+                drone['disarm_sent'] = True
+                drone['arming_sent'] = False
+
+        # --- ARM: flight_status == 1 ---
+        elif getattr(msg, 'flight_status', None) == 1:
+            # Only arm if PX4 is not already armed and we haven’t sent arm yet
+            if status.arming_state != VehicleStatus.ARMING_STATE_ARMED and (now - last_arm_attempt > 2.0):
+                self.get_logger().info(f"Telemetry flight_status==1 → Arming for drone {drone_id}")
                 self.arm(drone_id)
+                drone['arming_sent'] = True  # mark that we sent the arm command
+                drone['last_arm_attempt'] = now
+
+            # Engage offboard only if PX4 is already armed
+            if status.arming_state == VehicleStatus.ARMING_STATE_ARMED:
                 self.engage_offboard_mode(drone_id)
-                drone['arming_sent'] = True
+
+        # --- IN-FLIGHT: flight_status == 2 ---
+        elif getattr(msg, 'flight_status', None) == 2:
+            # Drone is in-flight; velocity commands can continue
+            pass
 
     def configure_drone_params(self, drone_id: int, drone_type: str) -> None:
         """Configure PX4 parameters for a given drone type."""
@@ -148,11 +201,31 @@ class OffboardControl(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to configure PX4 parameters for drone {drone_id}: {e}")
 
+    # Updated vehicle_status_callback: reset flags when PX4 reports actually disarmed
     def vehicle_status_callback(self, msg: VehicleStatus, drone_id: int) -> None:
-        """Callback function for vehicle_status topic subscriber."""
         self.drones[drone_id]['vehicle_status'] = msg
+
+        # Reset arming_sent only when PX4 has truly disarmed
         if msg.arming_state == VehicleStatus.ARMING_STATE_DISARMED:
+            if self.drones[drone_id].get('arming_sent', False):
+                self.get_logger().info(f"Drone {drone_id} reported disarmed → clearing arming flag")
             self.drones[drone_id]['arming_sent'] = False
+
+        # Reset disarm_sent once PX4 reports disarmed
+        if self.drones[drone_id].get('disarm_sent', False) and msg.arming_state == VehicleStatus.ARMING_STATE_DISARMED:
+            self.drones[drone_id]['disarm_sent'] = False
+    
+    def vehicle_sim_global_pose_callback(self, msg: VehicleGlobalPosition, drone_id: int) -> None:
+        """Store simulated local PX4 position (NED frame) and normalize altitude."""
+        drone = self.drones[drone_id]
+
+        # Initialize reference altitude on first callback
+        if 'sim_alt_ref' not in drone:
+            drone['sim_alt_ref'] = msg.alt
+
+        drone['sim_lat'] = msg.lat  
+        drone['sim_lon'] = msg.lon  
+        drone['sim_alt'] = msg.alt - drone['sim_alt_ref']  
 
     def arm(self, drone_id: int) -> None:
         """Send an arm command to the vehicle."""
@@ -183,7 +256,7 @@ class OffboardControl(Node):
         self.get_logger().info(f"Offboard mode engaged for drone {drone_id}")
 
     def land(self, drone_id: int) -> None:
-        """Switch to land mode."""
+        """Send land command."""
         self.publish_vehicle_command(
             drone_id, 
             VehicleCommand.VEHICLE_CMD_NAV_LAND
@@ -207,7 +280,7 @@ class OffboardControl(Node):
         drone = self.drones[drone_id]
         msg = TrajectorySetpoint()
         msg.position = [float('nan')]*3
-        msg.velocity = [drone['vy'], drone['vx'], -drone['vz']]  # NED frame
+        msg.velocity = [drone['vx'], drone['vy'], -drone['vz']]  # NED frame
         msg.yawspeed = drone['yawspeed']
         msg.timestamp = self.get_clock().now().nanoseconds // 1000 
         self.drones[drone_id]['publishers']['trajectory_setpoint'].publish(msg)
@@ -238,6 +311,10 @@ class OffboardControl(Node):
             if 'publishers' not in drone or drone.get('vehicle_status') is None:
                 continue
 
+            lat_diff_m, lon_diff_m = latlon_diff_to_meters(drone['sim_lat'], drone['sim_lon'], drone['lat'], drone['lon'])
+            alt_diff_m = drone['sim_alt'] - drone['alt']
+            self.get_logger().info(f"[Drone{drone_id}] Sim vs Real Δpos → north={lat_diff_m:.2f}m, east={lon_diff_m:.2f}m, down={alt_diff_m:.2f}m")
+
             # Always publish heartbeat (keeps offboard alive)
             self.publish_offboard_control_heartbeat_signal(drone_id)
 
@@ -262,7 +339,8 @@ def main(args=None):
         pass
     finally:
         controller.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

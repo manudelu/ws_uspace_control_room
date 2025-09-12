@@ -139,13 +139,13 @@ class DroneTelemetryListener(Node):
         telemetry_msg.drone_id = int(self.extract_data(data, ['drone', 'id'], 0))
         telemetry_msg.type = str(self.extract_data(data, ['drone', 'type'], ""))
         telemetry_msg.error_status = int(self.extract_data(data, ['status', 'error'], 0))
-        telemetry_msg.flight_status = int(self.extract_data(data, ['status', 'flight'], 0))
+        telemetry_msg.flight_status = int(self.extract_data(data, ['status', 'flight'], 0)) # 0 = STOPED = 0, ON_GROUND = 1, IN_AIR = 2
         telemetry_msg.gear = int(self.extract_data(data, ['status', 'gear'], 0))
         telemetry_msg.mode = int(self.extract_data(data, ['status', 'mode'], 0))
 
-        telemetry_msg.global_position.x = float(self.extract_data(data, ['global_position', 'latitude'], 0.0))
-        telemetry_msg.global_position.y = float(self.extract_data(data, ['global_position', 'longitude'], 0.0))
-        telemetry_msg.global_position.z = float(self.extract_data(data, ['global_position', 'altitude'], 0.0))
+        telemetry_msg.global_position.x = float(self.extract_data(data, ['position', 'latitude'], 0.0))
+        telemetry_msg.global_position.y = float(self.extract_data(data, ['position', 'longitude'], 0.0))
+        telemetry_msg.global_position.z = float(self.extract_data(data, ['position', 'height'], 0.0))
 
         telemetry_msg.rc_data.angular.x = float(self.extract_data(data, ['rc', 'roll'], 0.0))
         telemetry_msg.rc_data.angular.y = float(self.extract_data(data, ['rc', 'pitch'], 0.0))

@@ -44,21 +44,21 @@ class PX4ParamManager:
 
     def configure_drone(self, drone_type: str):
         """Apply PX4 parameter set based on drone type."""
-        if drone_type == "M210" or drone_type == "M210 RTK" or drone_type == "M200":
+        if drone_type == "M210" or drone_type == "M210RTK" or drone_type == "M200":
             # https://www.dji.com/it/products/compare-m200-series
             print(f"[PX4ParamManager] Configuring parameters for {drone_type}...")
             self.set_param("MPC_YAWRAUTO_MAX", 150.0)   # deg/s
             self.set_param("MPC_Z_VEL_MAX_UP", 5.0)     # m/s
             self.set_param("MPC_Z_VEL_MAX_DN", 3.0)     # m/s
             self.set_param("MPC_XY_VEL_MAX", 22.5)      # m/s
-        elif drone_type == "Mavic 3E" or drone_type == "Mavic 3T":
+        elif drone_type == "M3E" or drone_type == "M3T":
             # https://enterprise.dji.com/it/mavic-3-enterprise/specs
             print(f"[PX4ParamManager] Configuring parameters for {drone_type}...")
             self.set_param("MPC_YAWRAUTO_MAX", 200.0)
             self.set_param("MPC_Z_VEL_MAX_UP", 8.0)
             self.set_param("MPC_Z_VEL_MAX_DN", 6.0)
             self.set_param("MPC_XY_VEL_MAX", 21.0)
-        elif drone_type == "M350 RTK":
+        elif drone_type == "M350RTK":
             # https://enterprise.dji.com/it/matrice-350-rtk/specs
             print(f"[PX4ParamManager] Configuring parameters for {drone_type}...")
             self.set_param("MPC_YAWRAUTO_MAX", 100.0)
