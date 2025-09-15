@@ -4,7 +4,6 @@ import math
 import numpy as np
 from typing import Dict, Tuple
 
-
 def normalize_angle(angle: float) -> float:
     """Normalize angle to [-180, 180] range, ensuring 180 stays 180."""
     normalized = (angle + 180) % 360 - 180

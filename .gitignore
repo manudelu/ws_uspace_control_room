@@ -8,3 +8,6 @@ log/
 
 # Environment variables
 .env
+
+# Logs folder
+logs/

@@ -11,26 +11,25 @@ import math
 from drone_control.pid_controller import PIDController
 from drone_control.drone_param_manager import PX4ParamManager
 
-def latlon_diff_to_meters(lat1, lon1, lat2, lon2):
+# Plot (debug)
+import os
+import csv
+from datetime import datetime
+
+def latlon_diff_to_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> tuple:
     """
     Convert latitude and longitude differences to meters in north/east directions
     """
-    # Earth's radius in meters
-    R = 6371000.0
-    
-    # Convert latitude difference to meters (north-south)
+    R = 6371000.0 # Earth's radius in meters
     lat_diff_m = (lat2 - lat1) * math.pi/180 * R
-    
-    # Convert longitude difference to meters (east-west)
-    # Account for latitude (longitude distances shrink as you move toward poles)
     avg_lat = (lat1 + lat2) / 2.0 * math.pi/180
     lon_diff_m = (lon2 - lon1) * math.pi/180 * R * math.cos(avg_lat)
-    
     return lat_diff_m, lon_diff_m
 
 class OffboardControl(Node):
-    """Node for controlling multiple vehicles in offboard mode using existing topics."""
-
+    """
+    Node for controlling multiple vehicles in offboard mode using existing topics.
+    """
     def __init__(self) -> None:
         super().__init__('offboard_control')
 
@@ -42,11 +41,10 @@ class OffboardControl(Node):
             depth=1
         )
 
-        # Dictionary to store drone data
         self.drones: Dict[str, Dict[str, Any]] = {} 
         self.control_frequency = 10.0  # Hz 
 
-        # Setup drone registration subscriber
+        # Drone registration subscriber
         self.drone_id_subscriber = self.create_subscription(
             String, 
             '/drone_id', 
@@ -56,6 +54,25 @@ class OffboardControl(Node):
 
         # Main Control timer  
         self.timer = self.create_timer(1/self.control_frequency, self.timer_callback)
+
+        # Plot (debug)
+        log_dir = "logs"
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = os.path.join(log_dir, f"pid_log_{timestamp}.csv")
+        self.csv_file = open(self.log_file, mode="w", newline="")
+        self.csv_writer = csv.writer(self.csv_file)
+        self.csv_writer.writerow([
+            "time", "drone_id",
+            "sim_lat", "sim_lon", "sim_alt",
+            "lat", "lon", "alt",
+            "north_err", "east_err", "down_err",
+            "vx_cmd", "vy_cmd", "vz_cmd", "yaw_cmd",
+            "vx_actual", "vy_actual", "vz_actual",
+            "arming_state", "nav_state"
+        ])
+
+        self.get_logger().info(f"Logging PID data to {self.log_file}")
 
     def vehicle_id_callback(self, msg: String) -> None:
         """Handle new drone registration."""
@@ -69,22 +86,12 @@ class OffboardControl(Node):
 
     def register_drone(self, drone_id: int) -> None:
         """Initialize all publishers and subscribers for a new drone."""
-        # Initialize drone data structure
         self.drones[drone_id] = {
             'vehicle_status': None,
-            'vx': 0.0,
-            'vy': 0.0,
-            'vz': 0.0,
-            'yawspeed': 0.0,
-            'lat': 0.0,
-            'lon': 0.0,
-            'alt': 0.0,
-            'yaw': 0.0,
-            'sim_lat': 0.0,
-            'sim_lon': 0.0,
-            'sim_alt': 0.0,
-            'publishers': None,
-            'subscribers': None,
+            'vx': 0.0, 'vy': 0.0, 'vz': 0.0, 'yawspeed': 0.0,
+            'lat': 0.0, 'lon': 0.0, 'alt': 0.0, 'yaw': 0.0,
+            'sim_lat': 0.0, 'sim_lon': 0.0, 'sim_alt': 0.0, 'sim_yaw': 0.0,
+            'publishers': None, 'subscribers': None,
             'params_configured': False,
             'param_manager': None,
             'prestreaming': True,
@@ -94,8 +101,8 @@ class OffboardControl(Node):
 
         # TODO: Tune PID parameters 
         self.drones[drone_id]['pid'] = PIDController(
-            kp_vert=0.8, kd_vert=0.0, ki_vert=0.0,
-            kp_horiz=0.6, kd_horiz=0.0, ki_horiz=0.00,
+            kp_vert=1.3, kd_vert=0.4, ki_vert=0.05,
+            kp_horiz=0.8, kd_horiz=0.05, ki_horiz=0.0,
             kp_yaw=0.0, kd_yaw=0.0, ki_yaw=0.0,
             integral_limit=5.0,
             alpha=0.7,           
@@ -174,8 +181,9 @@ class OffboardControl(Node):
         if not drone['params_configured'] and hasattr(msg, 'drone_type'):
             self.configure_drone_params(drone_id, msg.drone_type)
 
+        flight_status = getattr(msg, 'flight_status', None)
         # --- DISARM: flight_status == 0 ---
-        if getattr(msg, 'flight_status', None) == 0:
+        if flight_status == 0:
             if status.arming_state == VehicleStatus.ARMING_STATE_ARMED and not drone.get('disarm_sent', False):
                 self.get_logger().info(f"Telemetry flight_status==0 → sending disarm for drone {drone_id}")
                 self.land(drone_id)
@@ -183,7 +191,7 @@ class OffboardControl(Node):
                 drone['arming_sent'] = False
 
         # --- ARM: flight_status == 1 ---
-        elif getattr(msg, 'flight_status', None) == 1:
+        elif flight_status == 1:
             # Only arm if PX4 is not already armed and we haven’t sent arm yet
             if status.arming_state != VehicleStatus.ARMING_STATE_ARMED and (now - last_arm_attempt > 2.0):
                 self.get_logger().info(f"Telemetry flight_status==1 → Arming for drone {drone_id}")
@@ -196,7 +204,7 @@ class OffboardControl(Node):
                 self.engage_offboard_mode(drone_id)
 
         # --- IN-FLIGHT: flight_status == 2 ---
-        elif getattr(msg, 'flight_status', None) == 2:
+        elif flight_status == 2:
             # Drone is in-flight; velocity commands can continue
             pass
 
@@ -276,7 +284,6 @@ class OffboardControl(Node):
 
     def publish_offboard_control_heartbeat_signal(self, drone_id: int) -> None:
         """Publish offboard control mode."""
-        drone = self.drones[drone_id]
         msg = OffboardControlMode()
         msg.position = False
         msg.velocity = True
@@ -288,7 +295,6 @@ class OffboardControl(Node):
 
     def publish_velocity_setpoint(self, drone_id: int, velocity: dict = None) -> None:
         """Publish velocity commands."""
-        #drone = self.drones[drone_id]
         vx, vy, vz, vw = velocity['x'], velocity['y'], -velocity['z'], velocity['yaw']
         msg = TrajectorySetpoint()
         msg.position = [float('nan')]*3
@@ -299,7 +305,6 @@ class OffboardControl(Node):
 
     def publish_vehicle_command(self, drone_id: int, command, **params) -> None:
         """Send vehicle command."""
-        drone = self.drones[drone_id]
         msg = VehicleCommand()
         msg.command = command
         msg.param1 = params.get("param1", 0.0)
@@ -321,16 +326,18 @@ class OffboardControl(Node):
         """Main control loop executed at fixed frequency."""
         dt = 1.0 / self.control_frequency
 
+        # Plot (debug)
+        now = self.get_clock().now().nanoseconds / 1e9  # seconds
+
         for drone_id, drone in self.drones.items():
             if 'publishers' not in drone or drone.get('vehicle_status') is None:
                 continue
 
-            lat_diff_m, lon_diff_m = latlon_diff_to_meters(drone['sim_lat'], drone['sim_lon'], drone['lat'], drone['lon'])
-            alt_diff_m = drone['sim_alt'] - drone['alt']
-            self.get_logger().info(f"[Drone{drone_id}] Sim vs Real Δpos → north={lat_diff_m:.2f}m, east={lon_diff_m:.2f}m, down={alt_diff_m:.2f}m")
-
             # Always publish heartbeat (keeps offboard alive)
             self.publish_offboard_control_heartbeat_signal(drone_id)
+
+            # Plot (debug)
+            velocity_cmd = {'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0}
 
             # If drone is already in offboard + armed → send velocity
             if (drone['vehicle_status'].nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and drone['vehicle_status'].arming_state == VehicleStatus.ARMING_STATE_ARMED):
@@ -349,8 +356,24 @@ class OffboardControl(Node):
                 )
                 self.publish_velocity_setpoint(drone_id, velocity=velocity_cmd)
             else:
-                # Safe idle velocity
                 self.publish_velocity_setpoint(drone_id, velocity={'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0})
+
+            # Log position differences
+            lat_diff_m, lon_diff_m = latlon_diff_to_meters(drone['sim_lat'], drone['sim_lon'], drone['lat'], drone['lon'])
+            alt_diff_m = drone['sim_alt'] - drone['alt']
+            self.get_logger().info(f"[Drone{drone_id}] Sim vs Real Δpos → north={lat_diff_m:.2f}m, east={lon_diff_m:.2f}m, down={alt_diff_m:.2f}m")
+
+            # Plot (debug)
+            self.csv_writer.writerow([
+                f"{now:.3f}", drone_id,
+                drone['sim_lat'], drone['sim_lon'], drone['sim_alt'],
+                drone['lat'], drone['lon'], drone['alt'],
+                lat_diff_m, lon_diff_m, alt_diff_m,
+                velocity_cmd['x'], velocity_cmd['y'], velocity_cmd['z'], velocity_cmd['yaw'],
+                drone['vx'], drone['vy'], drone['vz'],
+                drone['vehicle_status'].arming_state,
+                drone['vehicle_status'].nav_state
+            ])
 
 def main(args=None):
     rclpy.init(args=args)
