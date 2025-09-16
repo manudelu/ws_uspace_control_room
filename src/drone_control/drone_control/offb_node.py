@@ -9,6 +9,7 @@ from std_msgs.msg import String
 from typing import Dict, Any
 import math
 from drone_control.pid_controller import PIDController
+from drone_control.lowpass_filter import LowPassFilter
 from drone_control.drone_param_manager import PX4ParamManager
 
 # Plot (debug)
@@ -52,6 +53,12 @@ class OffboardControl(Node):
             10
         )
 
+        self.lpf = LowPassFilter(
+            cutoff=2.0,             
+            fs=self.control_frequency, 
+            order=2
+        )
+
         # Main Control timer  
         self.timer = self.create_timer(1/self.control_frequency, self.timer_callback)
 
@@ -67,11 +74,7 @@ class OffboardControl(Node):
             "sim_lat", "sim_lon", "sim_alt",
             "lat", "lon", "alt",
             "north_err", "east_err", "down_err",
-            "vx_cmd", "vy_cmd", "vz_cmd", "yaw_cmd",
-            "vx_actual", "vy_actual", "vz_actual",
-            "arming_state", "nav_state"
         ])
-
         self.get_logger().info(f"Logging PID data to {self.log_file}")
 
     def vehicle_id_callback(self, msg: String) -> None:
@@ -325,9 +328,7 @@ class OffboardControl(Node):
     def timer_callback(self) -> None:
         """Main control loop executed at fixed frequency."""
         dt = 1.0 / self.control_frequency
-
-        # Plot (debug)
-        now = self.get_clock().now().nanoseconds / 1e9  # seconds
+        now = self.get_clock().now().nanoseconds / 1e9  # Current time [s]
 
         for drone_id, drone in self.drones.items():
             if 'publishers' not in drone or drone.get('vehicle_status') is None:
@@ -336,24 +337,29 @@ class OffboardControl(Node):
             # Always publish heartbeat (keeps offboard alive)
             self.publish_offboard_control_heartbeat_signal(drone_id)
 
-            # Plot (debug)
-            velocity_cmd = {'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0}
-
             # If drone is already in offboard + armed → send velocity
             if (drone['vehicle_status'].nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and drone['vehicle_status'].arming_state == VehicleStatus.ARMING_STATE_ARMED):
                 pid = drone['pid']
+
+                # Apply LPF to measured positions
+                lat_f = self.lpf.apply(drone['lat'],  drone_id, 'lat')
+                lon_f = self.lpf.apply(drone['lon'],  drone_id, 'lon')
+                alt_f = self.lpf.apply(drone['alt'],  drone_id, 'alt')
+                yaw_f = self.lpf.apply(drone['yaw'],  drone_id, 'yaw')
+
                 # TODO: Yaw control not implemented yet
                 velocity_cmd, debug = pid.compute(
-                    latitude=drone['lat'],
-                    longitude=drone['lon'],
-                    altitude=drone['alt'],
-                    yaw=drone['yaw'],
+                    latitude=lat_f,
+                    longitude=lon_f,
+                    altitude=alt_f,
+                    yaw=yaw_f,
                     sim_lat=drone['sim_lat'],
                     sim_lon=drone['sim_lon'],
                     sim_alt=drone['sim_alt'],
                     sim_yaw=0.0,  
                     dt=dt
                 )
+
                 self.publish_velocity_setpoint(drone_id, velocity=velocity_cmd)
             else:
                 self.publish_velocity_setpoint(drone_id, velocity={'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0})
@@ -369,10 +375,6 @@ class OffboardControl(Node):
                 drone['sim_lat'], drone['sim_lon'], drone['sim_alt'],
                 drone['lat'], drone['lon'], drone['alt'],
                 lat_diff_m, lon_diff_m, alt_diff_m,
-                velocity_cmd['x'], velocity_cmd['y'], velocity_cmd['z'], velocity_cmd['yaw'],
-                drone['vx'], drone['vy'], drone['vz'],
-                drone['vehicle_status'].arming_state,
-                drone['vehicle_status'].nav_state
             ])
 
 def main(args=None):

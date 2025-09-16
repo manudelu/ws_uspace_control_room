@@ -9,7 +9,6 @@ from tkinter import ttk
 from typing import Dict, Any
 import threading
 import signal
-import sys
 
 class BatteryStatusGUI(Node):
     def __init__(self):

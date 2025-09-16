@@ -6,7 +6,7 @@ from std_msgs.msg import String
 from drone_interfaces.msg import DroneTelemetry 
 import socket
 import json
-from typing import Dict
+from typing import Dict, Any
 
 class TelemetryBroadcaster(Node):
     def __init__(self):
