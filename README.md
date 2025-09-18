@@ -1,10 +1,27 @@
-# Control Room Setup Guide
+# IoT-Enabled Control Room for Coordinated UAV Fleet Management
 
-This guide explains how to set up a development environment for the Control Room with PX4 Autopilot, ROS 2 Humble, AirSim/Unreal Engine, and Micro XRCE-DDS Agent.
+This repository provides an open-source framework for setting up a Control Room to coordinate fleets of UAVs using PX4 Autopilot, ROS 2 Humble, and AirSim/Unreal Engine.
 
-`Note:` Unreal Engine, Cosys-AirSim and QGroundControl are running on a Windows machine, while the remaining componets on a Docker container with Ubuntu 22.04.
+Unlike many UAV frameworks that are simulation-only, this Control Room has been tested with real DJI enterprise drones, ensuring scalability, interoperability, and practical deployment in industrial and research environments.
 
-Step1: Build Cosys-AirSim on Windows
+## What is a Control Room?
+
+The Control Room acts as a centralized *Command, Control & Communication (C3)* hub for both real and simulated UAVs.
+
+It enables:
+- Mission planning and fleet coordination acsross multiple UAVs
+- Real-time telemetry monitoring from physical drones
+- Digital Twin synchronization: each real drone is mirrored in a photorealistic 3D environment
+- IoT-ready communication: MQTT protocol enables bi-directional data exchange with UAVs and external IoT devices
+
+## Installation & Setup
+
+This guide assumes:
+
+- *Windows machine* → Unreal Engine (Cosys-AirSim + Cesium for Unreal) and QGroundControl
+- *Linux machine (Ubuntu 22.04)* → PX4, ROS 2, Micro XRCE-DDS, and the Control Room
+
+### Step1: Build Cosys-AirSim on Windows
 --------------
 *1. Install Unreal Engine 5.4*
 * Download the *Epic Games Launcher*: https://store.epicgames.com/it/download
@@ -104,7 +121,7 @@ Navigate to `Documents\AirSim`, and copy this inside the `settings.json` file (d
 }
 ```
 
-Step2: Initial Setup on Linux (Ubuntu 22.04)
+### Step2: Initial Setup on Linux (Ubuntu 22.04)
 -----------------
 
 ```bash
@@ -162,7 +179,7 @@ make px4_sitl_default none_iris
 param set UXRCE_DDS_KEY $((px4_instance+1)) 
 ```
 
-Step3: Install ROS 2 Humble
+### Step3: Install ROS 2 Humble
 -----------------
 
 ```bash
@@ -188,7 +205,7 @@ source /opt/ros/humble/setup.bash
 echo "source /opt/ros/humble/setup.bash" >> .bashrc
 ```
 
-Step4: Install Micro XRCE-DDS Agent
+### Step4: Install Micro XRCE-DDS Agent
 --------------
 
 ```bash
@@ -226,7 +243,7 @@ Terminal 2:
 make px4_sitl_default none_iris
 ```
 
-Step5: Control Room Workspace Setup
+### Step5: Control Room Workspace Setup
 --------------
 
 ```bash
@@ -249,48 +266,61 @@ colcon build
 source install/local_setup.bash
 ```
 
-Step6: Final Test
+### Step6: Final Test (Simulation)
 --------------------
 
 * Start the Unreal Engine simulation with Cosys-AirSim.
 
 * Open 3 terminals:
 
-Terminal 1 – Run Micro XRCE-DDS Agent
+    * *Terminal 1* – Run Micro XRCE-DDS Agent
 
-```bash
-MicroXRCEAgent udp4 -p 8888
-```
+        ```bash
+        MicroXRCEAgent udp4 -p 8888
+        ```
+    * *Terminal 2* – Run PX4 SITL
 
-Terminal 2 – Run PX4 SITL
+        ```bash
+        ./PX4-Autopilot/Tools/simulation/sitl_multiple_run.sh n   # n = number of drones (ex: 1)
+        ```
+    * *Terminal 3* – Run ROS 2 Offboard Example
 
-```bash
-./PX4-Autopilot/Tools/simulation/sitl_multiple_run.sh 1   # n = number of drones
-```
+        ```bash
+        ros2 run px4_ros_com offboard_control
+        ```
 
-Terminal 3 – Run ROS 2 Offboard Example
+The drone should arm, take off to 5m, and hover indefinitely.
 
-```bash
-ros2 run px4_ros_com offboard_control
-```
-
-The drone should arm, take off to 5m altitude, and hover indefinitely.
-
-Step7: You are ready to run the developed code
+## Usage Workflow
 ------------------------
 
-* Start the Unreal Engine simulation with Cosys-AirSim.
+* **Simulation Mode (software-in-the-loop)**
 
-* Open 2 terminals:
+    * Launch Unreal Engine simulation with Cosys-AirSim.
+    * Open 2 terminals:
 
-Terminal 1 – Launch Micro XRCE-DDS Agent and PX4 SITL (in this example, num_drone=2 instances of PX4)
+        * *Terminal 1* – Launch Micro XRCE-DDS Agent and PX4 SITL (in this example, num_drone=2 instances of PX4)
 
-```bash
-ros2 launch drone_control px4_instances_launch.py num_drones:=2
-```
+            ```bash
+            ros2 launch drone_control px4_instances_launch.py num_drones:=2
+            ```
+        * *Terminal 2* – Launch ROS2 Control Room nodes
 
-Terminal 3 – Launch ROS 2 Offboard node
+            ```bash
+            ros2 launch drone_control fleet_management_launch.py
+            ```
+    * Use QGroundControl to upload or draw missions.
 
-```bash
-ros2 launch drone_control fleet_management_launch.py
-```
+* **Digital Twin Mode (hardware-in-the-loop)**
+
+    * Ensure your drone has a companion onboard computer that publishes/receives MQTT messages (see *mqtt_ros_bridge.py*).
+    * Start the Control Room as above.
+    * You can plan missions in QGroundControl. 
+    * Upload mission, but do NOT start it from QGroundControl.
+    * Once uploaded, mission waypoints are intercepted by ROS2 (via MAVLink), processed, and republished over dedicated MQTT channels.
+    * The Control Room then:
+        * Dispatches the mission to the real UAV
+        * Mirrors execution in the Digital Twin
+        * Maintains fleet-wide synchronization in case of multi-UAV setup
+
+This workflow turns QGroundControl into a front-end planner, while the Control Room handles execution, coordination, and IoT integration
