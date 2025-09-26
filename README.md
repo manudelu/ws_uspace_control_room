@@ -292,7 +292,6 @@ source install/local_setup.bash
 The drone should arm, take off to 5m, and hover indefinitely.
 
 ## Usage Workflow
-------------------------
 
 * **Simulation Mode (software-in-the-loop)**
 

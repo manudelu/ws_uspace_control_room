@@ -1,0 +1,73 @@
+{
+    "SettingsVersion": 2.0,
+    "SimMode": "Multirotor",
+    "ViewMode": "FlyWithMe",
+    "PawnPaths": {
+        "DefaultQuadrotor": {
+            "PawnBP": "Class'/AirSim/Blueprints/BP_MyPawn.BP_MyPawn_C'"
+        }
+    },
+    "ClockType": "SteppableClock",
+    "RpcEnabled": true,
+    "Vehicles": {
+        "Drone1": {
+            "VehicleType": "PX4Multirotor",
+            "UseSerial": false,
+            "LockStep": true,
+            "UseTcp": true,
+            "TcpPort": 4560,
+            "ControlPortLocal": 14540,
+            "ControlPortRemote": 14580,
+            "LocalHostIp": "0.0.0.0",
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": -0.0,
+            "Yaw": 0,
+            "Sensors": {
+                "Barometer": {
+                    "SensorType": 1,
+                    "Enabled": true,
+                    "PressureFactorSigma": 0.0001825
+                }
+            },
+            "Parameters": {
+                "NAV_RCL_ACT": 0,
+                "NAV_DLL_ACT": 0,
+                "COM_OBL_ACT": 1,
+                "LPE_LAT": 44.57885173158841,
+                "LPE_LON": 8.94252468744978
+            }
+        },
+        "Drone2": {
+            "VehicleType": "PX4Multirotor",
+            "UseSerial": false,
+            "LockStep": true,
+            "UseTcp": true,
+            "TcpPort": 4561,
+            "ControlPortLocal": 14541,
+            "ControlPortRemote": 14581,
+            "LocalHostIp": "0.0.0.0",
+            "X": 6.894935940720379,
+            "Y": -2.5198625979234275,
+            "Z": -0.0,
+            "Yaw": 0,
+            "Sensors": {
+                "Barometer": {
+                    "SensorType": 1,
+                    "Enabled": true,
+                    "PressureFactorSigma": 0.0001825
+                }
+            },
+            "Parameters": {
+                "NAV_RCL_ACT": 0,
+                "NAV_DLL_ACT": 0,
+                "COM_OBL_ACT": 1
+            }
+        }
+    },
+    "OriginGeopoint": {
+        "Latitude": 44.57885173158841,
+        "Longitude": 8.94252468744978,
+        "Altitude": 0
+    }
+}
