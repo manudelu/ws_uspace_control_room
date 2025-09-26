@@ -52,74 +52,9 @@ build.cmd
 
 *4. Settings.json*
 
-Navigate to `Documents\AirSim`, and copy this inside the `settings.json` file (depending on your own configuration you'll need to tweak these parameters, please refer to the [official documentation](https://cosys-lab.github.io/Cosys-AirSim/settings/))
-```
-{
-    "SettingsVersion": 2.0,
-    "SimMode": "Multirotor",
-	"ViewMode": "FlyWithMe",
-	"PawnPaths": {
-		"DefaultQuadrotor": {"PawnBP": "Class'/AirSim/Blueprints/BP_MyPawn.BP_MyPawn_C'"}
-	},
-	"ClockType": "SteppableClock",
-	"RpcEnabled": true,
-    "Vehicles": {
-        "Drone1": {
-            "VehicleType": "PX4Multirotor",				
-            "UseSerial": false,
-			"LockStep": true,
-            "UseTcp": true,                                                
-            "TcpPort": 4560,
-			"ControlPortLocal": 14540,
-            "ControlPortRemote": 14580,
-            "LocalHostIp": "0.0.0.0",
-			"X": 0, "Y": 0, "Z": 0, "Yaw": 0,
-			"Sensors":{
-                "Barometer":{
-                    "SensorType": 1,
-                    "Enabled": true,
-                    "PressureFactorSigma": 0.0001825
-                }
-            },
-            "Parameters": {
-                "NAV_RCL_ACT": 0,
-                "NAV_DLL_ACT": 0,
-                "COM_OBL_ACT": 1,
-                "LPE_LAT": 44.063600,
-                "LPE_LON": 8.026497
-            }
-        },
-        "Drone2": {
-            "VehicleType": "PX4Multirotor",				
-            "UseSerial": false,
-			"LockStep": true,
-            "UseTcp": true,                                                
-            "TcpPort": 4561,
-			"ControlPortLocal": 14541,
-            "ControlPortRemote": 14581,
-            "LocalHostIp": "0.0.0.0",
-			"X": 10, "Y": 0, "Z": -3, "Yaw": 0,
-			"Sensors":{
-                "Barometer":{
-                    "SensorType": 1,
-                    "Enabled": true,
-                    "PressureFactorSigma": 0.0001825
-                }
-            },
-            "Parameters": {
-                "NAV_RCL_ACT": 0,
-                "NAV_DLL_ACT": 0,
-                "COM_OBL_ACT": 1
-            }
-        }
-    },
-    "OriginGeopoint": {
-        "Latitude": 44.063600,
-        "Longitude": 8.026497,
-        "Altitude": 0.0
-    }
-}
-```
+Copy the `/AirSim` folder from this repository into your `Documents\` directory, replacing the existing `/AirSim` folder. This folder contains the `settings.json` file and a Python script that can automatically update drone positions based on a CSV file before starting the simulation.
+
+> Depending on your configuration, you may need to tweak certain parameters. For detailed guidance, see the [official documentation](https://cosys-lab.github.io/Cosys-AirSim/settings/).
 
 ### Step2: Initial Setup on Linux (Ubuntu 22.04)
 -----------------
@@ -295,6 +230,7 @@ The drone should arm, take off to 5m, and hover indefinitely.
 
 * **Simulation Mode (software-in-the-loop)**
 
+    * Prepare the AirSim configuration by running the Python script (`Documents/AirSim/update_settings.py`). This script generates or updates the `settings.json` file with drone positions based on the starting positions provided in your CSV file.
     * Launch Unreal Engine simulation with Cosys-AirSim.
     * Open 2 terminals:
 
@@ -312,7 +248,7 @@ The drone should arm, take off to 5m, and hover indefinitely.
 
 * **Digital Twin Mode (hardware-in-the-loop)**
 
-    * Ensure your drone has a companion onboard computer that publishes/receives MQTT messages (see *mqtt_ros_bridge.py*).
+    * Ensure your drone has a companion onboard computer that publishes/receives MQTT messages (see `src/mqtt_bridge/mqtt_bridge/mqtt_ros_bridge.py`).
     * Start the Control Room as above.
     * You can plan missions in QGroundControl. 
     * Upload mission, but do NOT start it from QGroundControl.
