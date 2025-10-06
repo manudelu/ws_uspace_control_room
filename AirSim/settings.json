@@ -4,7 +4,7 @@
     "ViewMode": "FlyWithMe",
     "PawnPaths": {
         "DefaultQuadrotor": {
-            "PawnBP": "Class'/AirSim/Blueprints/BP_MyPawn.BP_MyPawn_C'"
+            "PawnBP": "Class'/Game/Drone/DroneModel/BP_MyPawn.BP_MyPawn_C'"
         }
     },
     "ClockType": "SteppableClock",
@@ -34,8 +34,8 @@
                 "NAV_RCL_ACT": 0,
                 "NAV_DLL_ACT": 0,
                 "COM_OBL_ACT": 1,
-                "LPE_LAT": 44.57885173158841,
-                "LPE_LON": 8.94252468744978
+                "LPE_LAT": 44.436876,
+                "LPE_LON": 8.884017
             }
         },
         "Drone2": {
@@ -47,9 +47,9 @@
             "ControlPortLocal": 14541,
             "ControlPortRemote": 14581,
             "LocalHostIp": "0.0.0.0",
-            "X": 6.894935940720379,
-            "Y": -2.5198625979234275,
-            "Z": -0.0,
+            "X": 2.0,
+            "Y": 2.0,
+            "Z": 0.0,
             "Yaw": 0,
             "Sensors": {
                 "Barometer": {
@@ -57,17 +57,12 @@
                     "Enabled": true,
                     "PressureFactorSigma": 0.0001825
                 }
-            },
-            "Parameters": {
-                "NAV_RCL_ACT": 0,
-                "NAV_DLL_ACT": 0,
-                "COM_OBL_ACT": 1
             }
         }
     },
     "OriginGeopoint": {
-        "Latitude": 44.57885173158841,
-        "Longitude": 8.94252468744978,
+        "Latitude": 44.436876,
+        "Longitude": 8.884017,
         "Altitude": 0
     }
 }

@@ -30,7 +30,7 @@ This guide assumes:
 
 *2. Build Cosys-AirSim*
 * Download *Visual Studio Community 2022*: https://visualstudio.microsoft.com/it/vs/community/
-* Make sure to select *Desktop Development with C++* and the latest *Windows 10 SDK* (or *Windows 11 SDK* if you're on Windows 11).
+* Make sure to select *Desktop Development with C++*, the latest *Windows 10 SDK* (or *Windows 11 SDK* if you're on Windows 11), and the MSVC v14.38 toolset.
 * In the *Individual Components* tab, ensure the latest *.NET Framework SDK* is selected.
 * Complete the installation of Visual Studio 2022.
 *Important:* Make sure that you installed the latest version of Visual Studio 2022.
@@ -251,7 +251,7 @@ The drone should arm, take off to 5m, and hover indefinitely.
     * Ensure your drone has a companion onboard computer that publishes/receives MQTT messages (see `src/mqtt_bridge/mqtt_bridge/mqtt_ros_bridge.py`).
     * Start the Control Room as above.
     * You can plan missions in QGroundControl. 
-    * Upload mission, but do NOT start it from QGroundControl.
+    * Upload the mission, but do NOT start it from QGroundControl.
     * Once uploaded, mission waypoints are intercepted by ROS2 (via MAVLink), processed, and republished over dedicated MQTT channels.
     * The Control Room then:
         * Dispatches the mission to the real UAV

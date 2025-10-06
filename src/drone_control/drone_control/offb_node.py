@@ -53,12 +53,6 @@ class OffboardControl(Node):
             10
         )
 
-        self.lpf = LowPassFilter(
-            cutoff=2.0,             
-            fs=self.control_frequency, 
-            order=2
-        )
-
         # Main Control timer  
         self.timer = self.create_timer(1/self.control_frequency, self.timer_callback)
 
@@ -104,12 +98,28 @@ class OffboardControl(Node):
 
         # TODO: Tune PID parameters 
         self.drones[drone_id]['pid'] = PIDController(
-            kp_vert=1.3, kd_vert=0.4, ki_vert=0.05,
-            kp_horiz=0.8, kd_horiz=0.05, ki_horiz=0.0,
-            kp_yaw=0.0, kd_yaw=0.0, ki_yaw=0.0,
+            kp_vert=1.3, 
+            kd_vert=0.4, 
+            ki_vert=0.05,
+
+            kp_horiz=0.2,#0.8, 
+            kd_horiz=0.05, 
+            ki_horiz=0.0,
+
+            kp_yaw=0.0, 
+            kd_yaw=0.0, 
+            ki_yaw=0.0,
+
             integral_limit=5.0,
             alpha=0.7,           
             output_limit=3.0     
+        )
+
+        # LPF per drone 
+        self.drones[drone_id]['lpf'] = LowPassFilter(
+            cutoff=2.0,
+            fs=self.control_frequency,
+            order=2
         )
 
         # Determine topic namespace
@@ -299,6 +309,13 @@ class OffboardControl(Node):
     def publish_velocity_setpoint(self, drone_id: int, velocity: dict = None) -> None:
         """Publish velocity commands."""
         vx, vy, vz, vw = velocity['x'], velocity['y'], -velocity['z'], velocity['yaw']
+
+        # NOTE: Add measured velocity from real telemetry (feedforward term) -> evaluate if needed
+        drone = self.drones[drone_id]
+        vx += drone['vx']
+        vy += drone['vy']
+        vz += drone['vz']
+
         msg = TrajectorySetpoint()
         msg.position = [float('nan')]*3
         msg.velocity = [vx, vy, vz]  # NED frame
@@ -317,7 +334,7 @@ class OffboardControl(Node):
         msg.param5 = params.get("param5", 0.0)
         msg.param6 = params.get("param6", 0.0)
         msg.param7 = params.get("param7", 0.0)
-        msg.target_system = drone_id  # Critical for multi-drone (https://docs.px4.io/main/en/ros2/multi_vehicle)
+        msg.target_system = drone_id # Critical for multi-drone (https://docs.px4.io/main/en/ros2/multi_vehicle)
         msg.target_component = 1
         msg.source_system = 1
         msg.source_component = 1
@@ -340,12 +357,13 @@ class OffboardControl(Node):
             # If drone is already in offboard + armed → send velocity
             if (drone['vehicle_status'].nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and drone['vehicle_status'].arming_state == VehicleStatus.ARMING_STATE_ARMED):
                 pid = drone['pid']
+                lpf = drone['lpf'] 
 
                 # Apply LPF to measured positions
-                lat_f = self.lpf.apply(drone['lat'],  drone_id, 'lat')
-                lon_f = self.lpf.apply(drone['lon'],  drone_id, 'lon')
-                alt_f = self.lpf.apply(drone['alt'],  drone_id, 'alt')
-                yaw_f = self.lpf.apply(drone['yaw'],  drone_id, 'yaw')
+                lat_f = lpf.apply(drone['lat'], drone_id, 'lat')
+                lon_f = lpf.apply(drone['lon'], drone_id, 'lon')
+                alt_f = lpf.apply(drone['alt'], drone_id, 'alt')
+                yaw_f = lpf.apply(drone['yaw'], drone_id, 'yaw')
 
                 # TODO: Yaw control not implemented yet
                 velocity_cmd, debug = pid.compute(

@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
+
     return LaunchDescription([
         Node(
             package='mqtt_bridge',
@@ -17,5 +18,5 @@ def generate_launch_description():
             package='mqtt_bridge',
             executable='mission_mqtt_publisher',
             name='mission_mqtt_publisher'
-        ),
+        )
     ])
