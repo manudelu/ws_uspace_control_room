@@ -38,7 +38,7 @@ sleep 2  # Allow MQTT bridge to initialize
 
 # --- Launch PX4 SITL instances ---
 echo "[INFO] Launching PX4 instances..."
-setsid ros2 launch drone_control px4_instances_launch.py &
+setsid ros2 launch drone_control px4_instances_launch.py num_drone:=2 &
 PX4_PID=$!
 echo "[INFO] PX4 launch PID: $PX4_PID"
 
