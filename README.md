@@ -375,7 +375,7 @@ MQTT_PASSWORD=<PASSWORD>
 
 ## Control Room Architecture
 
-
+<img width="832" height="612" alt="ControlRoom_NewArchitecture drawio" src="https://github.com/user-attachments/assets/44ab1bc0-ad10-40aa-9020-7b86be5e73e1" />
 
 <details> 
 
