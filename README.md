@@ -372,3 +372,166 @@ MQTT_PORT=<BROKER_PORT>
 MQTT_USERNAME=<USERNAME>
 MQTT_PASSWORD=<PASSWORD>
 ```
+
+## Control Room Architecture
+
+
+
+<details> 
+
+<summary><strong>mqtt_ros_bridge</strong></summary>
+
+The `mqtt_ros_bridge` node acts as a gateway between MQTT-based telemetry/action messages and ROS 2 topics. It subscribes to multiple MQTT topics for each drone (telemetry, actions, missions, acknowledgments, errors), parses the incoming JSON payloads, and republishes the data as ROS 2 messages (DroneTelemetry, DroneCommand, DroneStatus, etc.). This allows the Control Room and other ROS 2 nodes to receive real-time telemetry and mission updates from simulated or hardware-in-the-loop drones using a standard ROS 2 communication framework while remaining fully compatible with the fleet’s MQTT message format.
+
+</details> 
+
+<details> 
+
+<summary><strong>offb_node</strong></summary>
+
+The `offb_node` is the central node responsible for autonomous offboard control of multiple drones. Its key responsibilities and operations are as follows:
+
+*1. Drone Registration and Namespaced Topics*
+
+* Subscribes to the `/drone_id` topic (published by `mqtt_ros_bridge` node) to detect active drones dynamically.
+* For each new drone, it dynamically creates namespaced publishers and subscribers for offboard control, telemetry, vehicle status, and simulated global positions. Examples:
+    * Telemetry: `/fleet/drone<ID>/telmetry`
+    * PX4 VehicleStatus:
+        * Drone 1 → `/fmu/out/vehicle_status`
+        * Drone 2 → `px4_1/fmu/out/vehicle_status`
+        * Drone N → `px4_<N-1>/fmu/out/vehicle_status`
+    * Offboard command topics similarly follow the namespace pattern.
+* Each drone also gets an independent PID controller (horizontal, vertical, yaw) and a low-pass filter for telemetry smoothing.
+
+*2. Telemetry Processing and NED Conversion*
+
+* Receives telemetry via `DroneTelemetry` (from `mqtt_ros_bridge` or simulated drones).
+* Stores real drone telemetry (lat/lon/alt, velocity, yaw) and simulated PX4 positions.
+* Converts latitude/longitude differences to local NED coordinates:
+    * North = ΔLatitude × Earth's radius
+    * East = ΔLongitude × Earth's radius × cos(mean latitude)
+    * Down = difference in altitude relative to initial reference
+* This allows consistent velocity and position control relative to the local NED frame.
+
+*3. Feedforward + PID Velocity Control*
+
+* For trajectory tracking:
+    * The real drone velocity from telemetry is treated as a feedforward term.
+    * The PID computes a correction between the current drone position and the simulated trajectory.
+    * The final velocity command sent to PX4 is the sum between the feedforward and feedback terms.
+* This ensures the drone follows the intended trajectory even under varying velocities, with the PID providing only corrective adjustments.
+
+*4. Arm/Disarm and Offboard Mode Logic*
+
+The `offb_node` decides whether to arm, disarm, or engage offboard mode based on the drone's real flight status and PX4 vehicle state:
+
+| Flight Status | PX4 Status Check | Node Action |
+|---------------|-----------------|-------------|
+| **0 – Stopped / On Ground** | VehicleStatus.ARMING_STATE_ARMED | Send **Land/Disarm** command. Sets `disarm_sent=True`. |
+| **1 – On Ground / Ready** | VehicleStatus.ARMING_STATE_DISARMED | If PX4 is not armed and at least 2s passed since last attempt, send **Arm**. Once armed, **engage Offboard mode**. |
+| **2 – In Air** | VehicleStatus.ARMING_STATE_ARMED | Drone is in-flight; continue sending offboard velocity commands. |
+* Engages PX4 offboard mode and continuously publishes offboard control heartbeats to maintain command authority ([PX4 Offboard Requirements](https://docs.px4.io/main/en/flight_modes/offboard.html)).
+
+*5. Velocity Setpoints*
+
+* TrajectorySetpoint messages carry NED-frame velocity commands, combining PID corrections and telemetry feedforward.
+* Horizontal (north/east), vertical (down), and yaw velocity commands are all controlled individually.
+* If the drone is not yet in offboard + armed, a zero velocity setpoint is sent to avoid unsafe commands.
+
+*6. Logging and Debugging*
+
+* Logs simulated vs real positions in NED (north_err, east_err, down_err) with timestamps to CSV.
+* Allows offline analysis of PID performance, velocity feedforward effectiveness, and trajectory accuracy.
+
+*7. Multi-Drone Support*
+
+* The node scales automatically: each drone gets:
+    * Unique publishers and subscribers in the correct namespace
+    * Independent PID and low-pass filters
+    * Separate arming/disarming and offboard mode management
+
+*8. PX4 Parameter Manager*
+
+* Sets max velocities and yaw rate based on drone type (e.g., M210, M3E, M350RTK).
+* Called automatically once the drone type is known from telemetry.
+
+</details> 
+
+<details> 
+
+<summary><strong>mission_service_server</strong></summary>
+
+The `mission_service_server` node provides a centralized ROS 2 service interface to fetch MAVLink missions from multiple drones. It abstracts the details of MAVLink communication and allows other ROS 2 nodes to request missions without dealing with low-level protocols. Its main features:
+
+*1. Drone Registration and Namespaced Service Creation*
+
+* Subscribes to `/drone_id` topic to detect active drones dynamically.
+* For each drone, it creates a namespaced ROS 2 service to fetch individual missions:
+    * Drone 1 → `/fetch_mission`
+    * Drone 2 → `px4_1/fetch_mission`
+    * Drone N → `px4_<N-1>/fetch_mission`
+* Maintains a persistent MAVLink UDP connection to each drone for reliable mission retrieval.
+* Uses threading locks to ensure thread-safe MAVLink communication.
+
+*2. Fetching Missions from MAVLink*
+
+* On receiving a mission fetch request:
+    * Flushes old MAVLink messages.
+    * Sends `MISSION_REQUEST_LIST` to retrieve the total waypoint count.
+    * Iteratively requests each waypoint (`MISSION_REQUEST_INT`) and converts MAVLink integers to latitude/longitude/altitude.
+* Supports retries for missing or delayed MAVLink responses.
+* Returns waypoints in JSON format via `FetchMission` service response.
+
+*3. Aggregator Service (`/fetch_missions`)*
+
+* Offers `FetchAllMissions` service to request missions from multiple drones at once.
+* Calls each drone-specific fetch service and aggregates results in a single JSON object.
+* Provides success/failure status and per-drone error reporting.
+
+*4. Connection Management*
+
+* Opens persistent UDP MAVLink connections (`udp:127.0.0.1:<14540 + drone_index>`) to each PX4 instance.
+* Ensures graceful shutdown by closing connections when the node exits.
+
+*5. Thread-Safety*
+
+* Each drone connection is protected by a `threading.Lock` to allow concurrent service requests without race conditions.
+
+</details>
+
+<details> 
+
+<summary><strong>mission_mqtt_publisher</strong></summary>
+
+The `mission_mqtt_publisher` node provides a GUI-based interface to fetch, view, and publish missions for multiple drones via MQTT. It bridges ROS 2 mission services and the fleet's MQTT message bus.
+
+*1. ROS 2 Service Client*
+
+* Connects to the `/fetch_missions` service provided by `mission_service_server`.
+* Supports fetching missions for all drones or selected drone IDs.
+* Parses JSON mission responses and stores per-drone mission data.
+
+*2. MQTT Publisher*
+
+* Publishes missions to the fleet using MQTT topics:
+    * Drone 1 → `fleet/drone1/missions`
+    * Drone 2 → `fleet/drone2/missions`
+* Filters waypoints by MAVLink command ID, e.g., only `MAV_CMD_NAV_WAYPOINT` are published.
+* Publishes missions as JSON messages compatible with the fleet’s MQTT telemetry/action framework.
+
+*3. Tkinter GUI*
+
+* Displays available drones and allows selecting one, multiple, or all drones.
+* Buttons:
+    * **Fetch Missions** → calls ROS 2 service to update the mission list.
+    * **Publish Selected** → publishes missions for selected drones.
+    * **Publish All** → publishes missions for all drones.
+* Provides a status label for operation feedback (success, errors, or warnings).
+
+*4. Multi-Drone Support*
+
+* Works seamlessly with multiple drones.
+* GUI and MQTT publishing handle each drone independently.
+* Supports asynchronous mission fetch/publish in background threads to avoid blocking the GUI.
+
+</details>
