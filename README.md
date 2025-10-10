@@ -34,6 +34,8 @@ This guide assumes:
 
 <summary><strong>Step1 - Build Cosys-AirSim</strong></summary>
 
+Cosys-AirSim acts as the simulation backend that bridges the Unreal Engine 3D world with MAVLink-based control systems such as PX4. Unreal Engine provides the high-fidelity environment with physics and rendering capabilities, while AirSim injects simulated vehicle models, sensor emulation, and networking interfaces so PX4 can control virtual drones as if they were physical ones. Because AirSim is a C++ Unreal plugin, Visual Studio is required to compile the plugin and generate the necessary binaries to interface with Unreal Engine. This step establishes the virtual world — effectively creating the digital twin environment in which PX4 will operate during SITL simulation.
+
 *1. Install Unreal Engine 5.4*
 * Download the *Epic Games Launcher*: https://store.epicgames.com/it/download
 * Open it and navigate to the *Unreal Engine* tab (left sidebar).
@@ -76,13 +78,7 @@ build.cmd
 
 <summary><strong>Step2 - Install and Configure PX4 SITL</strong></summary>
 
-Initial System Setup
-
-```bash
-apt install sudo
-sudo apt update
-sudo apt-get install git-all
-```
+PX4 SITL (Software-In-The-Loop) runs the complete PX4 flight control stack natively on the host machine without requiring any physical flight controller hardware. It simulates all flight control logic, including attitude control, state estimation, uORB messaging, and MAVLink communication. When connected to AirSim, PX4 treats the simulator as if it were real drone hardware, exchanging sensor data and actuator commands over UDP. Configuring the PX4_SIM_HOST_ADDR ensures that PX4 knows where to send and receive MAVLink data from the Windows machine running Unreal Engine, forming the core autopilot component of the simulation pipeline.
 
 *1. Clone and Build PX4 Autopilot*
 
@@ -156,6 +152,8 @@ param set UXRCE_DDS_KEY $((px4_instance+1))
 
 <summary><strong>Step3 - Install and Configure QGroundControl</strong></summary>
 
+QGroundControl serves as a MAVLink Ground Control Station (GCS) that connects directly to PX4 SITL over UDP. It is used to visualize telemetry, check parameters, issue arm/disarm commands, and verify that MAVLink streams are being published correctly from PX4. By assigning unique UDP ports per drone, QGroundControl can manage multiple simulated vehicles simultaneously. This tool is essential for validating that PX4 SITL is running properly and that AirSim is correctly forwarding MAVLink traffic from its simulated environment.
+
 *1. Download and Install QGroundControl*
 
 Visit the official website [QGroundControl](https://docs.qgroundcontrol.com/master/en/qgc-user-guide/getting_started/download_and_install.html) and download the latest version for your platform.  
@@ -181,6 +179,8 @@ After configuring, QGroundControl should show the drones as connected and displa
 <details> 
 
 <summary><strong>Step4 - Install ROS 2 Humble</strong></summary>
+
+ROS 2 acts as a high-level middleware layer that enables distributed control, autonomy logic, and mission orchestration using DDS-based communication. Unlike MAVLink, which is optimized for low-level flight control, ROS 2 enables modular software components to interact using publish/subscribe semantics across PX4 topics. It is the platform on which the Control Room and offboard control nodes will run, allowing high-level commands to be published into PX4’s offboard interface. Installing ROS 2 sets the foundation for integrating PX4 with external robotics logic and multi-agent coordination.
 
 ```bash
 sudo apt update && sudo apt install locales
@@ -209,6 +209,8 @@ echo "source /opt/ros/humble/setup.bash" >> .bashrc
 <details> 
 
 <summary><strong>Step5 - Install Micro XRCE-DDS Agent (Required for PX4 ↔ ROS 2 Bridge)</strong></summary>
+
+PX4 internally uses uORB for its messaging architecture, but to communicate with ROS 2, which uses FastDDS, a bridge is required. The Micro XRCE-DDS Agent acts as this bridge by translating PX4’s uORB messages into XRCE-DDS packets that are compatible with ROS 2 topics. PX4 includes a lightweight Micro XRCE-DDS client, and when the agent is running, it establishes a session that exposes PX4 telemetry and accepts ROS 2 offboard control messages. Without this component, ROS 2 nodes would not be able to interact with PX4 in real time.
 
 *1. Clone and Build the Agent*
 ```bash
@@ -254,6 +256,8 @@ make px4_sitl_default none_iris
 
 <summary><strong>Step6 - Control Room Workspace Setup</strong></summary>
 
+The Control Room workspace contains the ROS 2 nodes responsible for orchestrating drone missions and interacting with PX4 through DDS. To maintain compatibility between PX4 and ROS 2, the px4_msgs package must use the exact same message definitions as the PX4 version running in SITL. By synchronizing .msg files from PX4, you ensure that DDS serialization remains binary-compatible, preventing communication faults or mismatched message layouts. Building the workspace compiles these ROS 2 interfaces and prepares the system for mission-level control operations.
+
 *1. Create Workspace and Clone Repository*
 ```bash
 mkdir -p ~/ws_uspace_control_room
@@ -287,6 +291,8 @@ source install/local_setup.bash
 
 <summary><strong>Step7 - Final Communication Test</strong></summary>
 
+This final step validates the end-to-end communication chain across all components: AirSim generates simulated physics and sensor data, PX4 SITL interprets this data and runs the control loops, Micro XRCE-DDS bridges PX4’s internal uORB messages to ROS 2 DDS topics, and the ROS 2 offboard node publishes control commands back into PX4. When the drone arms and reaches a stable hover, it confirms that PX4 is receiving valid sensor data from AirSim, DDS communication is functioning correctly, and offboard mode control via ROS 2 is successfully influencing the autopilot.
+
 *1. Start the Unreal Engine simulation with Cosys-AirSim*
 
 *2. Open 3 terminals*
@@ -316,6 +322,8 @@ source install/local_setup.bash
 * **Simulation Mode (software-in-the-loop)**
 
     * Prepare the AirSim configuration by running the helper Python script (`Documents/AirSim/update_settings.py`). This script generates or updates the `settings.json` file with drone positions based on the starting positions provided in your CSV file.
+    * In Unreal Engine, manually set the CesiumGeoreference GPS position for Drone 1. This ensures that the Unreal world coordinates are correctly aligned with PX4 and AirSim.
+    * If using a real or simulated DJI drone connected via MQTT, ensure that DJI Assistant 2 is running in simulation mode and that the drone's GPS position is properly set to match the simulation environment. This allows telemetry from the DJI drone to integrate correctly with the Control Room.
     * Start Unreal Engine and launch the simulation.
     * Use the provided `launch_all.sh` script to automatically build and source the workspace, start PX4 SITL, Micro XRCE-DDS Agent, ROS 2 Control Room nodes, and other necessary services. Internally, the script performs the following steps:
         * Build the workspace:
@@ -364,5 +372,3 @@ MQTT_PORT=<BROKER_PORT>
 MQTT_USERNAME=<USERNAME>
 MQTT_PASSWORD=<PASSWORD>
 ```
-
-## Code Explanation
