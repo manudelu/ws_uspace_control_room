@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleStatus, VehicleGlobalPosition
+from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleStatus, VehicleGlobalPosition, VehicleAttitude
 from drone_interfaces.msg import DroneTelemetry
 from std_msgs.msg import String
 from typing import Dict, Any
@@ -85,7 +85,7 @@ class OffboardControl(Node):
         """Initialize all publishers and subscribers for a new drone."""
         self.drones[drone_id] = {
             'vehicle_status': None,
-            'vx': 0.0, 'vy': 0.0, 'vz': 0.0, 'yawspeed': 0.0,
+            'vx': 0.0, 'vy': 0.0, 'vz': 0.0,
             'lat': 0.0, 'lon': 0.0, 'alt': 0.0, 'yaw': 0.0,
             'sim_lat': 0.0, 'sim_lon': 0.0, 'sim_alt': 0.0, 'sim_yaw': 0.0,
             'publishers': None, 'subscribers': None,
@@ -106,7 +106,7 @@ class OffboardControl(Node):
             kd_horiz=0.05, 
             ki_horiz=0.0,
 
-            kp_yaw=0.0, 
+            kp_yaw=1.2, 
             kd_yaw=0.0, 
             ki_yaw=0.0,
 
@@ -145,6 +145,12 @@ class OffboardControl(Node):
                 lambda msg, id=drone_id: self.vehicle_sim_global_pose_callback(msg, id),
                 self.qos_profile
             ),
+            'vehicle_attitude': self.create_subscription(
+                VehicleAttitude,
+                f'/{ns}fmu/out/vehicle_attitude',
+                lambda msg, id=drone_id: self.vehicle_attitude_callback(msg, id),
+                self.qos_profile
+            ),
         }
 
         # Create publishers
@@ -175,7 +181,6 @@ class OffboardControl(Node):
             'vx': msg.velocity.linear.x,
             'vy': msg.velocity.linear.y,
             'vz': msg.velocity.linear.z,
-            'yawspeed': msg.velocity.angular.z,
             'lat': msg.global_position.x,
             'lon': msg.global_position.y,
             'alt': msg.global_position.z,
@@ -259,6 +264,11 @@ class OffboardControl(Node):
         drone['sim_lon'] = msg.lon  
         drone['sim_alt'] = msg.alt - drone['sim_alt_ref']  
 
+    def vehicle_attitude_callback(self, msg: VehicleAttitude, drone_id: int) -> None:
+        drone = self.drones[drone_id]
+        q0, q1, q2, q3 = msg.q[0], msg.q[1], msg.q[2], msg.q[3]
+        drone['sim_yaw'] = math.atan2(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3))
+
     def arm(self, drone_id: int) -> None:
         """Send an arm command to the vehicle."""
         self.publish_vehicle_command(
@@ -310,7 +320,6 @@ class OffboardControl(Node):
         """Publish velocity commands."""
         vx, vy, vz, vw = velocity['x'], velocity['y'], -velocity['z'], velocity['yaw']
 
-        # NOTE: Add measured velocity from real telemetry (feedforward term) -> evaluate if needed
         drone = self.drones[drone_id]
         vx += drone['vx']
         vy += drone['vy']
@@ -365,7 +374,6 @@ class OffboardControl(Node):
                 alt_f = lpf.apply(drone['alt'], drone_id, 'alt')
                 yaw_f = lpf.apply(drone['yaw'], drone_id, 'yaw')
 
-                # TODO: Yaw control not implemented yet
                 velocity_cmd, debug = pid.compute(
                     latitude=lat_f,
                     longitude=lon_f,
@@ -374,7 +382,7 @@ class OffboardControl(Node):
                     sim_lat=drone['sim_lat'],
                     sim_lon=drone['sim_lon'],
                     sim_alt=drone['sim_alt'],
-                    sim_yaw=0.0,  
+                    sim_yaw=drone['sim_yaw'],  
                     dt=dt
                 )
 

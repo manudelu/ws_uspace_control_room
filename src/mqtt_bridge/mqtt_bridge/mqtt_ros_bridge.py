@@ -164,15 +164,12 @@ class DroneTelemetryListener(Node):
         telemetry_msg.orientation.y = float(self.extract_data(data, ['quaternion', 'q2'], 0.0))
         telemetry_msg.orientation.z = float(self.extract_data(data, ['quaternion', 'q3'], 0.0))
 
-        # Yaw from quaternion (in degrees)
+        # Yaw from quaternion
         q0 = telemetry_msg.orientation.w
         q1 = telemetry_msg.orientation.x
         q2 = telemetry_msg.orientation.y
         q3 = telemetry_msg.orientation.z
-        telemetry_msg.yaw = math.atan2(
-            2 * (q0 * q3 + q1 * q2),
-            1 - 2 * (q2 * q2 + q3 * q3)
-        ) * (180.0 / math.pi)
+        telemetry_msg.yaw = math.atan2(2 * (q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3))
 
         telemetry_msg.avoid_down = float(self.extract_data(data, ['avoidData', 'down'], 0))
         telemetry_msg.avoid_back = float(self.extract_data(data, ['avoidData', 'back'], 0))

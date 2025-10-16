@@ -4,12 +4,6 @@ import math
 import numpy as np
 from typing import Dict, Tuple
 
-def normalize_angle(angle: float) -> float:
-    """Normalize angle to [-180, 180] range, ensuring 180 stays 180."""
-    normalized = (angle + 180) % 360 - 180
-    return normalized if not (normalized == -180 and angle > 0) else 180
-
-
 def clamp(value: float, min_val: float, max_val: float) -> float:
     """Clamp value between min_val and max_val."""
     return max(min_val, min(max_val, value))
@@ -76,7 +70,9 @@ class PIDController:
         self.p_error['lat'] = (latitude - sim_lat) * lat_to_meters
         self.p_error['lon'] = (longitude - sim_lon) * ((lon_to_meters_real + lon_to_meters_sim) / 2)
         self.p_error['alt'] = altitude - sim_alt
-        self.p_error['yaw'] = normalize_angle(yaw - sim_yaw)
+        # Compute wrapped yaw error (ensures shortest direction, handles ±pi transitions)
+        yaw_error = yaw - sim_yaw
+        self.p_error['yaw'] = (yaw_error + math.pi) % (2 * math.pi) - math.pi
 
         # Derivative (filtered)
         for key in self.p_error:
@@ -124,6 +120,9 @@ class PIDController:
             axis: clamp(p_terms[axis] + i_terms[axis] + d_terms[axis], -self.output_limit, self.output_limit)
             for axis in ['x', 'y', 'z', 'yaw']
         }
+
+        # Flip yaw to match PX4 convention
+        velocity_adjustment['yaw'] = -velocity_adjustment['yaw']
 
         # Update state
         self.prev_p_error = self.p_error.copy()
