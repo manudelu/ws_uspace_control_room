@@ -14,6 +14,8 @@ It enables:
 - Digital Twin synchronization: each real drone is mirrored in a photorealistic 3D environment
 - IoT-ready communication: MQTT protocol enables bi-directional data exchange with UAVs and external IoT devices
 
+With full MQTT and MAVLink integration, the system can support virtually any drone, from DJI enterprise models to custom UAVs, as long as the drone has a companion onboard computer publishing telemetry in the expected MQTT format. 
+
 ## Unreal Engine Environment 
 
 The Unreal Engine 5.4 environment is maintained in a separate repository, clone it somewhere on your machine: 
@@ -348,7 +350,7 @@ This final step validates the end-to-end communication chain across all componen
         QGC allows you to design and visualize drone missions, but it is limited to simulation within the GUI. No telemetry is published to the Control Room in this mode.
 
         * **Full telemetry simulation via MQTT:**
-        The system can simulate actual drone telemetry using the same MQTT message format as in `mqtt_ros_bridge.py`. This simulates the real behavior of drones publishing telemetry in a hardware-in-the-loop scenario, allowing you to test the Control Room and fleet management software as if real drones were operating.
+        The system can simulate actual drone telemetry using the same MQTT message format as in `mqtt_ros_bridge.py`. This simulates the real behavior of drones publishing telemetry in a hardware-in-the-loop scenario, allowing you to test the Control Room and fleet management software as if real drones were operating. (see *"Offline Test"* section below)
 
 * **Digital Twin Mode (hardware-in-the-loop)**
 
@@ -372,6 +374,40 @@ MQTT_PORT=<BROKER_PORT>
 MQTT_USERNAME=<USERNAME>
 MQTT_PASSWORD=<PASSWORD>
 ```
+
+## Offline Test - MQTT Mission Replay (Simulated Drone Telemetry)
+
+The Control Room supports simulated drone telemetry via MQTT, which is useful for testing and digital twin scenarios without requiring a real UAV. This workflow allows mission data to be replayed as if drones were flying in the real world.
+
+### Workflow
+*1. Generate a CSV from QGroundControl mission*
+* Plan and execute a mission in QGroundControl while running the simulation in Unreal Engine + PX4 (without MQTT/ROS digital twin).
+* Export the mission log from QGroundControl as a CSV file.
+
+*2. Upsample the CSV*
+
+Use the provided `qgc_csv_upsample.py` script to convert your CSV (typically 1Hz) to a 10 Hz dataset, matching the Control Room control loop frequency.
+```bash
+python qgc_csv_upsample.py <input>.csv <output>.csv --rate 10
+```
+
+*3. Launch the Control Room System*
+
+Start the Control Room system following the instructions in the previous section of this README.
+
+*4. Replay the mission over MQTT*
+* Run the `mqtt_replay.py` script with the upsampled CSV file:
+```bash
+python3 mqtt_replay.py --file <output>.csv --drone_id 1
+```
+* The script will:
+    * Connect to the MQTT broker (configured via `.env` file).
+    * Publishe telemetry messages for the specified drone ID.
+
+*5. Optional: Select a Mission Period*
+
+If the CSV contains multiple mission periods (separated by time gaps), the script will display all periods and allow you to choose which one to replay.
+
 
 ## Control Room Architecture
 
