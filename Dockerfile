@@ -1,69 +1,70 @@
-FROM ubuntu22-ldap:latest
+FROM ubuntu:22.04
 
-# Set non-interactive mode and default locale
-ENV DEBIAN_FRONTEND=noninteractive \
-    TZ=Etc/UTC \
-    LANG=en_US.UTF-8 \
-    LC_ALL=en_US.UTF-8
+# Set noninteractive frontend for apt
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
 
 WORKDIR /root
 
-SHELL ["/bin/bash", "-c"]
-
-# Install system dependencies
-RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
+# Update and install basic tools
+RUN apt update && apt upgrade -y \
+    && apt install -y --no-install-recommends \
+        git \
         sudo \
-        git-all \
+        curl \
+        locales \
+        vim \
+        nano \
         gedit \
         terminator \
         inetutils-ping \
         python3 \
         python3-pip \
-        locales \
         software-properties-common \
-        curl && \
-    locale-gen en_US.UTF-8 && \
-    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 && \
-    rm -rf /var/lib/apt/lists/*
+    && apt clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Python dependencies
-RUN python3 -m pip install --no-cache-dir \
-    paho-mqtt \
-    dotenv
+# Set locale
+RUN locale-gen en_US.UTF-8 \
+    && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
-# Clone PX4 and build
-RUN git clone https://github.com/PX4/PX4-Autopilot.git --recursive && \
-    ./PX4-Autopilot/Tools/setup/ubuntu.sh --no-sim-tools && \
-    cd PX4-Autopilot && make px4_sitl_default && \
-    make clean && make distclean && \
-    git checkout v1.15.4 && \
-    make submodulesclean
+# Install ROS2 Humble
+RUN add-apt-repository universe -y \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" > /etc/apt/sources.list.d/ros2.list \
+    && apt update && apt install -y ros-humble-desktop ros-dev-tools \
+    && pip install --user -U empy==3.3.4 pyros-genmsg setuptools
 
-# Setup ROS2 Humble
-RUN add-apt-repository universe -y && \
-    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-        http://packages.ros.org/ros2/ubuntu \
-        $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | \
-        tee /etc/apt/sources.list.d/ros2.list > /dev/null && \
-    apt-get update && apt-get install -y --no-install-recommends \
-        ros-humble-desktop \
-        ros-dev-tools && \
-    python3 -m pip install --no-cache-dir --user \
-        empy==3.3.4 \
-        pyros-genmsg \
-        setuptools && \
-    echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
-    rm -rf /var/lib/apt/lists/*
+# Source ROS2 setup
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 
-# Build Micro XRCE-DDS Agent
-RUN git clone -b ros2 https://github.com/eProsima/Micro-XRCE-DDS-Agent.git && \
-    cd Micro-XRCE-DDS-Agent && \
-    sed -E -i "s|set\(\s*_fastdds_tag\s*v?2\.12\.x\s*\)|set(_fastdds_tag 2.13.x)|g" ./CMakeLists.txt && \
-    mkdir build && cd build && cmake .. && \
-    make -j$(nproc) && make install && \
-    ldconfig /usr/local/lib/
+# Clone PX4 Autopilot
+RUN git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+WORKDIR /root/PX4-Autopilot
 
-# PX4 Environment variable
-RUN echo "export PX4_SIM_HOST_ADDR=192.168.9.37" >> ~/.bashrc
+# Setup PX4 environment and build SITL
+RUN git checkout v1.15.4 \
+    && ./Tools/setup/ubuntu.sh --no-sim-tools \
+    && make px4_sitl_default
+
+# Clone and build Micro XRCE-DDS Agent
+WORKDIR /root
+RUN git clone -b ros2 https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
+WORKDIR /root/Micro-XRCE-DDS-Agent
+RUN sed -E -i "s|set\(\s*_fastdds_tag\s*v?2\.12\.x\s*\)|set(_fastdds_tag 2.13.x)|g" ./CMakeLists.txt \
+    && mkdir build && cd build && cmake .. && make -j$(nproc) && make install \
+    && ldconfig /usr/local/lib/
+
+WORKDIR /root
+
+# Set PX4 simulation host address as an environment variable (users can override)
+ENV PX4_SIM_HOST_ADDR=127.0.0.1
+RUN echo "export PX4_SIM_HOST_ADDR=${PX4_SIM_HOST_ADDR}" >> ~/.bashrc
+
+# Install Control Room dependencies
+RUN python3 -m pip install --no-cache-dir paho-mqtt websockets "numpy<2.0" python-dotenv
+
+# Default command
+CMD ["/bin/bash"]
