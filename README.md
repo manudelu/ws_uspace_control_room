@@ -32,6 +32,61 @@ This guide assumes:
 - *Windows machine* → Unreal Engine (Cosys-AirSim + Cesium for Unreal) and QGroundControl
 - *Linux machine (Ubuntu 22.04)* → PX4, ROS 2, Micro XRCE-DDS, and the Control Room
 
+---
+
+### Option A – Docker Installation (Recommended)
+
+Run the full Control Room environment inside a Docker container with all dependencies pre-configured.
+This avoids dependency conflicts and ensures reproducibility across machines.
+
+**1. Build the Docker Image**
+```
+docker build -t control-room:22 .
+```
+
+**2. Run the Container**
+
+Start a new interactive container and mount a local directory that will hold your Control Room code.
+Create an empty folder anywhere on your machine — this is where you will clone or copy the repository later. Replace <PATH_TO_EMPTY_FOLDER> with its path:
+```
+docker run -it --name control-room-env -v "<PATH_TO_EMPTY_FOLDER>:/home/control-room" control-room:22 bash
+```
+> *Note:*
+> * The container will use this folder as /home/control-room.
+> * Any files you place here will be accessible inside the container.
+
+**3. Clone Repository and Build**
+```bash
+cd /home/control-room/
+git clone https://github.com/manudelu/ws_uspace_control_room.git --recursive
+cd ws_uspace_control_room
+colcon build 
+```
+
+**4. Synchronize PX4 Messages**
+To keep `px4_msgs` message definitions in sync with your PX4 installation:
+
+```bash
+rm /home/control-room/ws_uspace_control_room/src/px4_msgs/msg/*.msg
+cp ~/PX4-Autopilot/msg/*.msg /home/control-room/ws_uspace_control_room/src/px4_msgs/msg/
+```
+
+**5. Build the workspace:**
+
+```bash
+colcon build
+source install/local_setup.bash
+```
+
+---
+
+### Option B – Complete Native Installation (Advanced / For Development) 
+
+Manually install and configure each component (PX4, ROS 2, Micro XRCE-DDS, AirSim, etc.) on your host machines.
+
+<details>
+<summary><strong>Installation</strong></summary>
+
 <details> 
 
 <summary><strong>Step1 - Build Cosys-AirSim</strong></summary>
@@ -260,18 +315,14 @@ make px4_sitl_default none_iris
 
 The Control Room workspace contains the ROS 2 nodes responsible for orchestrating drone missions and interacting with PX4 through DDS. To maintain compatibility between PX4 and ROS 2, the px4_msgs package must use the exact same message definitions as the PX4 version running in SITL. By synchronizing .msg files from PX4, you ensure that DDS serialization remains binary-compatible, preventing communication faults or mismatched message layouts. Building the workspace compiles these ROS 2 interfaces and prepares the system for mission-level control operations.
 
-*1. Create Workspace and Clone Repository*
+*1. Clone Repository and Build*
 ```bash
-mkdir -p ~/ws_uspace_control_room
 git clone https://github.com/manudelu/ws_uspace_control_room.git --recursive
+cd ws_uspace_control_room
+colcon build 
 ```
 
-*2. Install Python Dependencies*
-```bash
-python3 -m pip install paho-mqtt python-dotenv websockets "numpy<2.0"
-```
-
-*3. Synchronize PX4 Messages*
+*2. Synchronize PX4 Messages*
 To keep `px4_msgs` message definitions in sync with your PX4 installation:
 
 ```bash
@@ -279,12 +330,16 @@ rm ~/ws_uspace_control_room/src/px4_msgs/msg/*.msg
 cp ~/PX4-Autopilot/msg/*.msg ~/ws_uspace_control_room/src/px4_msgs/msg/
 ```
 
-*4. Build the workspace:*
+*3. Build the workspace:*
 
 ```bash
-source /opt/ros/humble/setup.bash
 colcon build
 source install/local_setup.bash
+```
+
+*4. Install Python Dependencies*
+```bash
+python3 -m pip install paho-mqtt python-dotenv websockets "numpy<2.0"
 ```
 
 </details>
@@ -319,53 +374,63 @@ This final step validates the end-to-end communication chain across all componen
 
 </details>
 
+</details>
+
 ## Usage Workflow
 
-* **Simulation Mode (software-in-the-loop)**
+<details>
 
-    * Prepare the AirSim configuration by running the helper Python script (`Documents/AirSim/update_settings.py`). This script generates or updates the `settings.json` file with drone positions based on the starting positions provided in your CSV file.
-    * In Unreal Engine, manually set the CesiumGeoreference GPS position for Drone 1. This ensures that the Unreal world coordinates are correctly aligned with PX4 and AirSim.
-    * If using a real or simulated DJI drone connected via MQTT, ensure that DJI Assistant 2 is running in simulation mode and that the drone's GPS position is properly set to match the simulation environment. This allows telemetry from the DJI drone to integrate correctly with the Control Room.
-    * Start Unreal Engine and launch the simulation.
-    * Use the provided `launch_all.sh` script to automatically build and source the workspace, start PX4 SITL, Micro XRCE-DDS Agent, ROS 2 Control Room nodes, and other necessary services. Internally, the script performs the following steps:
-        * Build the workspace:
-            ```bash
-            colcon build
-            source install/setup.bash
-            ```
-        * Start MQTT → WebSocket bridge:
-            ```bash
-            python3 src/mqtt_bridge/mqtt_bridge/websocket.py 
-            ```
-        * Launch Micro XRCE-DDS Agent and PX4 SITL (in this example, num_drone=2 instances of PX4)
-            ```bash
-            ros2 launch drone_control px4_instances_launch.py num_drones:=2
-            ```
-        * Launch ROS2 Control Room nodes
-            ```bash
-            ros2 launch drone_control fleet_management_launch.py
-            ```
-    * Simulate drone operation
-        * *Mission testing via QGroundControl (QGC):*
-        QGC allows you to design and visualize drone missions, but it is limited to simulation within the GUI. No telemetry is published to the Control Room in this mode.
+<summary><strong>Simulation Mode (software-in-the-loop)</strong></summary>
 
-        * **Full telemetry simulation via MQTT:**
-        The system can simulate actual drone telemetry using the same MQTT message format as in `mqtt_ros_bridge.py`. This simulates the real behavior of drones publishing telemetry in a hardware-in-the-loop scenario, allowing you to test the Control Room and fleet management software as if real drones were operating. (see *"Offline Test"* section below)
+ * Prepare the AirSim configuration by running the helper Python script (`Documents/AirSim/update_settings.py`). This script generates or updates the `settings.json` file with drone positions based on the starting positions provided in your CSV file.
+ * In Unreal Engine, manually set the CesiumGeoreference GPS position for Drone 1. This ensures that the Unreal world coordinates are correctly aligned with PX4 and AirSim.
+ * If using a real or simulated DJI drone connected via MQTT, ensure that DJI Assistant 2 is running in simulation mode and that the drone's GPS position is properly set to match the simulation environment. This allows telemetry from the DJI drone to integrate correctly with the Control Room.
+ * Start Unreal Engine and launch the simulation.
+ * Use the provided `launch_all.sh` script to automatically build and source the workspace, start PX4 SITL, Micro XRCE-DDS Agent, ROS 2 Control Room nodes, and other necessary services. Internally, the script performs the following steps:
+     * Build the workspace:
+         ```bash
+         colcon build
+         source install/setup.bash
+         ```
+     * Start MQTT → WebSocket bridge:
+         ```bash
+         python3 src/mqtt_bridge/mqtt_bridge/websocket.py 
+         ```
+     * Launch Micro XRCE-DDS Agent and PX4 SITL (in this example, num_drone=2 instances of PX4)
+         ```bash
+         ros2 launch drone_control px4_instances_launch.py num_drones:=2
+         ```
+     * Launch ROS2 Control Room nodes
+         ```bash
+         ros2 launch drone_control fleet_management_launch.py
+         ```
+ * Simulate drone operation
+     * *Mission testing via QGroundControl (QGC):*
+     QGC allows you to design and visualize drone missions, but it is limited to simulation within the GUI. No telemetry is published to the Control Room in this mode.
 
-* **Digital Twin Mode (hardware-in-the-loop)**
+     * **Full telemetry simulation via MQTT:**
+     The system can simulate actual drone telemetry using the same MQTT message format as in `mqtt_ros_bridge.py`. This simulates the real behavior of drones publishing telemetry in a hardware-in-the-loop scenario, allowing you to test the Control Room and fleet management software as if real drones were operating. (see *"Offline Test"* section below)
 
-    * Ensure your real drone (e.g., DJI Mavic 3E) has a companion onboard companion computer capable of publishing and receiving MQTT messages (see `src/mqtt_bridge/mqtt_bridge/mqtt_ros_bridge.py`).
-    * Start the Control Room following the same procedure as in Simulation Mode.
-    * As the drone moves, it publishes telemetry via MQTT.
-    * You can plan missions in QGroundControl (QGC):
-        * Upload the mission to the drone, but do *NOT* start it from QGC.
-        * Once uploaded, mission waypoints are intercepted by ROS2 via MAVLink, processed, and republished over dedicated MQTT channels.
-    * The Control Room then:
-        * Dispatches the mission commands to the real UAV.
-        * Mirrors execution in the Digital Twin environment.
-        * Maintains fleet-wide synchronization in multi-UAV setups.
+</details>
+
+<details>
+
+<summary><strong>Digital Twin Mode (hardware-in-the-loop)</strong></summary>
+
+ * Ensure your real drone (e.g., DJI Mavic 3E) has a companion onboard companion computer capable of publishing and receiving MQTT messages (see `src/mqtt_bridge/mqtt_bridge/mqtt_ros_bridge.py`).
+ * Start the Control Room following the same procedure as in Simulation Mode.
+ * As the drone moves, it publishes telemetry via MQTT.
+ * You can plan missions in QGroundControl (QGC):
+     * Upload the mission to the drone, but do *NOT* start it from QGC.
+     * Once uploaded, mission waypoints are intercepted by ROS2 via MAVLink, processed, and republished over dedicated MQTT channels.
+ * The Control Room then:
+     * Dispatches the mission commands to the real UAV.
+     * Mirrors execution in the Digital Twin environment.
+     * Maintains fleet-wide synchronization in multi-UAV setups.
 
 > This workflow transforms QGroundControl into a front-end mission planner, while the Control Room manages execution, coordination, and IoT integration.
+
+</details>
 
 **Note:** To connect the Control Room to the MQTT broker, create a `.env` file in the workspace root with the following structure:
 ```bash
