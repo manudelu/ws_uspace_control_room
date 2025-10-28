@@ -395,48 +395,81 @@ It supports both DJI drones (via DJI Assistant 2) and setups with an onboard com
 * For real flights, the onboard companion computer publishes telemetry and receives mission commands via MQTT.
 * No DJI Assistant 2 is required — telemetry is gathered directly from the UAV and mirrored in the digital twin.
 
-#### Mission Workflow
+#### Launch Order
 
-1. **Start the Control Room**
+The following launch order ensures correct synchronization across PX4, Unreal Engine, and the Control Room:
 
-    Use the provided `launch_all.sh` script to automaticaly launch all necessary services:
+1. **Prepare AirSim Configuration**
+
+   Run the helper Python script to generate or update the AirSim `settings.json` file with drone positions based on your CSV input:
+   ```bash
+   python3 Documents/AirSim/update_settings.py
+   ```
+2. **Set CesiumGeoreference in Unreal Engine**
+
+    Open you Unreal Engine project and manually set the CesiumGeoreference GPS position for Drone 1. This ensures that Unreal world coordinates are correctly aligned with PX4 and AirSim.
+
+3. **Launch the Unrel Engine Simulation**
+
+4. **(If Using a Real DJI Drone) – Start DJI Assistant 2**
+
+    * Connect the drone to the host PC via USB–USB.
+    * Launch DJI Assistant 2 and start the simulation.
+    * If you’re using an onboard companion computer, connect it via USB–TTL — it will forward telemetry over MQTT.
+    * Wait until the connection is stable and telemetry data is visible before proceeding.
+
+5. **Start the Control Room**
+
+    Use the provided `launch_all.sh` script to automaticaly launch all required services:
     ```bash
     chmod +x launch_all.sh
     ./launch_all.sh
     ```
 
-    Internally, the script performs the following steps:
-    * Build the workspace:
+    Internally, this performs the following:
+    * *Build the workspace:*
         ```bash
         colcon build
         source install/setup.bash
         ```
-    * Start MQTT → WebSocket bridge:
+    * *Start MQTT → WebSocket bridge:*
         ```bash
         python3 src/mqtt_bridge/mqtt_bridge/websocket.py 
         ```
-    * Launch Micro XRCE-DDS Agent and PX4 SITL (in this example, num_drone=2 instances of PX4)
+    * *Launch Micro XRCE-DDS Agent and PX4 SITL* (in this example, num_drone=2 instances of PX4)
         ```bash
         ros2 launch drone_control px4_instances_launch.py num_drones:=2
         ```
-    * Launch ROS2 Control Room nodes
+    * *Launch ROS2 Control Room nodes*
         ```bash
         ros2 launch drone_control fleet_management_launch.py
         ```
 
-2. **Mission Planning**
+6. **Connect QGroundControl (QGC)**
+
+    Connect QGC to the PX4 SITL instances (or the real drone).
+    QGC can be used to design and upload missions, but execution is managed by the Control Room.
+
+#### Mission Workflow
+
+1. **Mission Planning**
     * Design a mission in QGroundControl (QGC).
     * Do *not* start it directly from QGC — the Control Room intercepts and processes the MAVLink mission data.
-    * Mission waypoints and commands are republished as MQTT messages.
+    * Use the **Mission Interface GUI** to fetch and publish missions:  
+        - Click *Fetch Missions* to retrieve available missions from all drones.
+        - Select one, multiple, or all drones and click *Publish Selected* / *Publish All*.
+        - The waypoints are automatically forwarded via MQTT to the real drones.
 
-3. **Execution and Synchronization**
-    * The real drone executes the mission.
+2. **Execution and Synchronization**
+    * The real drone executes the mission according to the published waypoints.
     * The digital twin in Unreal mirrors its behavior in real time.
     * Telemetry, mission state, and IoT data are synchronized across all active UAVs.
 
 > The Digital Twin Mode enables real-time synchronization between physical drones and their virtual replicas, providing a unified view for monitoring, coordination, and analytics.
 
-**Note:** To connect the Control Room to the MQTT broker, create a `.env` file in the workspace root with the following structure:
+#### MQTT Configuration
+
+To connect the Control Room to the MQTT broker, create a `.env` file in the workspace root with the following structure:
 ```bash
 MQTT_BROKER=<BROKER_IP>
 MQTT_PORT=<BROKER_PORT>
@@ -451,31 +484,31 @@ This allows you to validate mission logic, visualization, and data flow without 
 
 1. **Obtain a CSV Dataset**
 * You can generate one by planning and executing a mission in QGroundControl while running the simulation in Unreal Engine + PX4 (without MQTT/ROS digital twin).
-* Export the mission log from QGroundControl as a CSV file. he file must include columns: `timestamp,latitude,longitude,altitude,vx,vy,vz`.
+* Export the mission log from QGroundControl as a CSV file. The file must include columns: `timestamp,latitude,longitude,altitude,vx,vy,vz`.
 * QGC typically logs at 1 Hz — it can be upsampled to 10 Hz for smoother playback:
-```bash
-python qgc_csv_upsample.py <input>.csv <output>.csv --rate 10
-```
+    ```bash
+    python qgc_csv_upsample.py <input>.csv <output>.csv --rate 10
+    ```
 
 2. **Launch the Control Room System**
 
-Start the Control Room system following the instructions in the "Mission Workflow" section.
+    Start the Control Room system following the instructions in the "Mission Workflow" section.
 
 3. **Replay the Mission over MQTT**
 
 * Run the `mqtt_replay.py` script to publish telemetry:
-```bash
-python3 mqtt_replay.py --file <output>.csv --drone_id 1
-```
+    ```bash
+    python3 mqtt_replay.py --file <output>.csv --drone_id 1
+    ```
 * The script will:
     * Connect to the MQTT broker (configured via `.env` file).
     * Publish telemetry messages for the specified drone ID.
 
-The Control Room will treat this replayed data exactly as if it came from a real drone.
+    The Control Room will treat this replayed data exactly as if it came from a real drone.
 
 4. **(Optional) Record a Mission with ROS**
 
-If the Control Room is running, you can record telemetry topics (`/fleet/<drone_id>/telemetry`) directly through [ros2 bag](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Recording-And-Playing-Back-Data/Recording-And-Playing-Back-Data.html).
+    If the Control Room is running, you can record telemetry topics (`/fleet/<drone_id>/telemetry`) directly through [ros2 bag](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Recording-And-Playing-Back-Data/Recording-And-Playing-Back-Data.html).
 
 ## Control Room Architecture
 
