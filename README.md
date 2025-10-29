@@ -447,13 +447,13 @@ The following launch order ensures correct synchronization across PX4, Unreal En
 
 6. **Connect QGroundControl (QGC)**
 
-    Connect QGC to the PX4 SITL instances (or the real drone).
+    Connect QGC to the PX4 SITL instances.
     QGC can be used to design and upload missions, but execution is managed by the Control Room.
 
 #### Mission Workflow
 
 1. **Mission Planning**
-    * Design a mission in QGroundControl (QGC).
+    * Design a mission in QGroundControl.
     * Do *not* start it directly from QGC — the Control Room intercepts and processes the MAVLink mission data.
     * Use the **Mission Interface GUI** to fetch and publish missions:  
         - Click *Fetch Missions* to retrieve available missions from all drones.
@@ -512,7 +512,7 @@ This allows you to validate mission logic, visualization, and data flow without 
 
 ## Control Room Architecture
 
-<img width="759" height="544" alt="ControlRoom_Architecture" src="https://github.com/user-attachments/assets/1ea73931-fac4-4a13-8490-0858e888fa27" />
+<img width="763" height="573" alt="Architecture" src="https://github.com/user-attachments/assets/77c02793-5516-4eb9-86dc-4d77ed9dc767" />
 
 <details> 
 
