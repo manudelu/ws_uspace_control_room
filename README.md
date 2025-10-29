@@ -512,7 +512,7 @@ This allows you to validate mission logic, visualization, and data flow without 
 
 ## Control Room Architecture
 
-<img width="763" height="573" alt="Architecture" src="https://github.com/user-attachments/assets/77c02793-5516-4eb9-86dc-4d77ed9dc767" />
+<img width="885" height="676" alt="Architecture" src="https://github.com/user-attachments/assets/431ae93f-19a1-4a13-9168-dc608d0cda5e" />
 
 <details> 
 
