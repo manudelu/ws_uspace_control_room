@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e  # Exit immediately if any command fails
 
+# --- Parse optional argument for number of drones ---
+NUM_DRONES=${1:-1}  # Default to 1 if no argument is provided
+
 # --- Build workspace ---
 echo "[INFO] Building workspace..."
 colcon build
@@ -38,7 +41,7 @@ sleep 2  # Allow MQTT bridge to initialize
 
 # --- Launch PX4 SITL instances ---
 echo "[INFO] Launching PX4 instances..."
-setsid ros2 launch drone_control px4_instances_launch.py num_drone:=2 &
+setsid ros2 launch drone_control px4_instances_launch.py num_drones:=$NUM_DRONES &
 PX4_PID=$!
 echo "[INFO] PX4 launch PID: $PX4_PID"
 
