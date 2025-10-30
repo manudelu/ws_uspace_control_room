@@ -443,7 +443,7 @@ The following launch order ensures correct synchronization across PX4, Unreal En
     Use the provided `launch_all.sh` script to automaticaly launch all required services:
     ```bash
     chmod +x launch_all.sh
-    ./launch_all.sh
+    ./launch_all.sh n # Where n = number of drones (defaults to 1 if not specified)
     ```
 
     Internally, this performs the following:
