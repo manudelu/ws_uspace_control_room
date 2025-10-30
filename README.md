@@ -49,11 +49,12 @@ docker build -t control-room:22 .
 Start a new interactive container and mount a local directory that will hold your Control Room code.
 Create an empty folder anywhere on your machine — this is where you will clone or copy the repository later. Replace <PATH_TO_EMPTY_FOLDER> with its path:
 ```
-docker run -it --name control-room-env -v "<PATH_TO_EMPTY_FOLDER>:/home/control-room" control-room:22 bash
+docker run -it --name control-room-env -v "<PATH_TO_EMPTY_FOLDER>:/home/control-room" -e DISPLAY=host.docker.internal:0.0 control-room:22 bash
 ```
 > *Note:*
 > * The container will use this folder as /home/control-room.
 > * Any files you place here will be accessible inside the container.
+> * Ensure [VcXsrv](https://vcxsrv.com/) (or another X server) is running for GUI tools.
 
 **3. Clone Repository and Build**
 ```bash
@@ -64,6 +65,7 @@ colcon build
 ```
 
 **4. Synchronize PX4 Messages**
+
 To keep `px4_msgs` message definitions in sync with your PX4 installation:
 
 ```bash
@@ -71,11 +73,29 @@ rm /home/control-room/ws_uspace_control_room/src/px4_msgs/msg/*.msg
 cp ~/PX4-Autopilot/msg/*.msg /home/control-room/ws_uspace_control_room/src/px4_msgs/msg/
 ```
 
-**5. Build the workspace:**
+**5. Build the workspace**
 
 ```bash
 colcon build
 source install/local_setup.bash
+```
+
+**6. Export PX4_SIM_HOST_ADDR**
+
+Since the Control Room runs inside Docker on Linux, but AirSim/Unreal runs on your Windows host, you must set PX4_SIM_HOST_ADDR to the Windows machine’s IPv4 address. This allows the container to send/receive simulation data correctly.
+
+```bash
+export PX4_SIM_HOST_ADDR=<SIMULATOR_HOST_IP>
+```
+
+**7. Create a .env for MQTT**
+
+To connect the Control Room to the MQTT broker, create a `.env` file in the workspace root with the following structure:
+```bash
+MQTT_BROKER=<BROKER_IP>
+MQTT_PORT=<BROKER_PORT>
+MQTT_USERNAME=<USERNAME>
+MQTT_PASSWORD=<PASSWORD>
 ```
 
 ---
@@ -466,16 +486,6 @@ The following launch order ensures correct synchronization across PX4, Unreal En
     * Telemetry, mission state, and IoT data are synchronized across all active UAVs.
 
 > The Digital Twin Mode enables real-time synchronization between physical drones and their virtual replicas, providing a unified view for monitoring, coordination, and analytics.
-
-#### MQTT Configuration
-
-To connect the Control Room to the MQTT broker, create a `.env` file in the workspace root with the following structure:
-```bash
-MQTT_BROKER=<BROKER_IP>
-MQTT_PORT=<BROKER_PORT>
-MQTT_USERNAME=<USERNAME>
-MQTT_PASSWORD=<PASSWORD>
-```
 
 #### Offline Variant - Mission Replay (No Real Drone)
 

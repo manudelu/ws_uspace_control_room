@@ -37,6 +37,9 @@ RUN add-apt-repository universe -y \
     && apt update && apt install -y ros-humble-desktop ros-dev-tools \
     && pip install --user -U empy==3.3.4 pyros-genmsg setuptools
 
+# Fix setuptools version for ROS2 compatibility
+RUN python3 -m pip install --no-cache-dir --upgrade 'pip<25' 'setuptools<=69.5.1'
+
 # Source ROS2 setup
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 
@@ -46,6 +49,8 @@ WORKDIR /root/PX4-Autopilot
 
 # Setup PX4 environment and build SITL
 RUN git checkout v1.15.4 \
+    && git submodule sync --recursive \
+    && git submodule update --init --recursive \
     && ./Tools/setup/ubuntu.sh --no-sim-tools \
     && make px4_sitl_default
 
