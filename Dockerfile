@@ -38,7 +38,7 @@ RUN add-apt-repository universe -y \
     && pip install --user -U empy==3.3.4 pyros-genmsg setuptools
 
 # Fix setuptools version for ROS2 compatibility
-RUN python3 -m pip install --no-cache-dir --upgrade 'pip<25' 'setuptools<=69.5.1'
+RUN python3 -m pip install --no-cache-dir --upgrade 'pip<24' 'setuptools<=69.5.1'
 
 # Source ROS2 setup
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
