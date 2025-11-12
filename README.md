@@ -16,6 +16,23 @@ It enables:
 
 With full MQTT and MAVLink integration, the system can support virtually any drone, from DJI enterprise models to custom UAVs, as long as the drone has a companion onboard computer publishing telemetry in the expected MQTT format. 
 
+## BibTeX
+
+[IoT-Enabled Control Room for Coordinated UAV Fleet Management](https://doi.org/10.1109/MASS66014.2025.00123)
+
+```
+@INPROCEEDINGS{11206250,
+  author={Delucchi, Manuel and Vercelli, Gianni and Priyadarshan, Subhransu Sourav},
+  booktitle={2025 IEEE 22nd International Conference on Mobile Ad-Hoc and Smart Systems (MASS)}, 
+  title={IoT-Enabled Control Room for Coordinated UAV Fleet Management}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={753-758},
+  keywords={Visualization;Three-dimensional displays;Scalability;Autonomous aerial vehicles;Smart systems;Real-time systems;Geospatial analysis;Digital twins;Telemetry;Synchronization;UAV Fleet Management;Control Room;Digital Twin;Real-Time Simulation;MQTT;ROS},
+  doi={10.1109/MASS66014.2025.00123}}
+```
+
 ## Unreal Engine Environment 
 
 The Unreal Engine 5.4 environment is maintained in a separate repository, clone it somewhere on your machine: 
